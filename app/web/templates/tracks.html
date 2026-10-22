@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Tracks · parkhotelchecker{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Tracks</h1>
+  <a class="button" href="/tracks/new">New track</a>
+</div>
+
+{% if not tracks %}
+  <div class="empty">
+    <p>No tracks yet.</p>
+    <p class="muted">A track is one holiday shape: a party, an arrival window, a length of stay.
+      Create one and the first poll fills in the prices.</p>
+    <p><a class="button" href="/tracks/new">Create the first track</a></p>
+  </div>
+{% else %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Track</th>
+          <th>Party</th>
+          <th>Arrivals</th>
+          <th>Nights</th>
+          <th class="num">Cheapest now</th>
+          <th>Last price</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tracks %}
+        <tr class="{{ 'dim' if t.status == 'stopped' }}">
+          <td><a href="/tracks/{{ t.id }}">{{ t.name }}</a>
+            <div class="muted small">{{ t.shortlisted }} alerting · {{ t.series_watched }} dates watched</div>
+          </td>
+          <td>{{ t.adults|party(t.child_birthdates|length) }}</td>
+          <td class="nowrap">{{ t.arrival_start|day }}{% if t.arrival_end != t.arrival_start %}
+            <span class="muted">→ {{ t.arrival_end|day }}</span>{% endif %}</td>
+          <td>{{ t.los.replace('_', ' ') }}</td>
+          <td class="num">{{ t.cheapest|money }}</td>
+          <td>{{ t.last_observation|ago }}</td>
+          <td>
+            {% if t.status == 'active' %}
+              <span class="badge on">tracking</span>
+            {% else %}
+              <span class="badge">stopped</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

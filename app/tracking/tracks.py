@@ -39,6 +39,37 @@ def arrival_dates(start: date, end: date) -> list[date]:
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
 
 
+# Disneyland Paris charges for children from their third birthday; under-3s
+# are free and have no field in the price payload at all. Age is taken at the
+# arrival date, which is what the upstream does.
+FREE_UNDER = 3
+
+
+def age_on(birthdate: date, on: date) -> int:
+    return on.year - birthdate.year - ((on.month, on.day) < (birthdate.month, birthdate.day))
+
+
+def chargeable_children(birthdates: tuple[str, ...], arrivals: list[date]) -> tuple[str, ...]:
+    """Drop under-3s, and refuse a window where a child's price status flips.
+
+    A child who turns 3 mid-window is chargeable on some arrival dates and free
+    on others. One track prices one party, so that has to be two tracks; guessing
+    would silently price the wrong holiday.
+    """
+    chargeable: list[str] = []
+    for raw in birthdates:
+        birthdate = date.fromisoformat(raw)
+        statuses = {age_on(birthdate, arrival) >= FREE_UNDER for arrival in arrivals}
+        if len(statuses) > 1:
+            raise ValueError(
+                f"a child born {raw} turns {FREE_UNDER} during the window; "
+                "create one track per side of that birthday"
+            )
+        if statuses.pop():
+            chargeable.append(raw)
+    return tuple(chargeable)
+
+
 def validate_spec(spec: TrackSpec, *, today: date | None = None) -> list[date]:
     today = today or date.today()
     arrivals = arrival_dates(spec.arrival_start, spec.arrival_end)
@@ -76,6 +107,7 @@ def validate_spec(spec: TrackSpec, *, today: date | None = None) -> list[date]:
             raise ValueError("cadence_hours must be >= 1")
     for birthdate in spec.child_birthdates:
         _ = date.fromisoformat(birthdate)  # raises on malformed input
+    chargeable_children(spec.child_birthdates, arrivals)
 
     return arrivals
 
@@ -85,8 +117,11 @@ def create_track(
 ) -> int:
     now = now or store.utcnow()
     arrivals = validate_spec(spec)
+    # Under-3s are free and absent from the payload; the party that prices is
+    # the chargeable one, and it is shared by every track with that party.
+    chargeable = chargeable_children(spec.child_birthdates, arrivals)
     party_id = store.get_or_create_party(
-        conn, adults=spec.adults, child_birthdates=spec.child_birthdates
+        conn, adults=spec.adults, child_birthdates=chargeable
     )
 
     cursor = conn.execute(

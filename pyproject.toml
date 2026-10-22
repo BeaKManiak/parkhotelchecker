@@ -13,6 +13,7 @@ dependencies = [
     "uvicorn>=0.30",
     "jinja2>=3.1",
     "bcrypt>=4.2",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -22,7 +23,10 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["app", "app.dlp"]
+packages = ["app", "app.dlp", "app.tracking", "app.web"]
+
+[tool.setuptools.package-data]
+"app.web" = ["templates/*.html", "static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ hotel.name }} · {{ track.name }}{% endblock %}
+{% block head %}<script src="/static/chart.umd.min.js" defer></script>{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="/tracks/{{ track.id }}">← {{ track.name }}</a></p>
+
+<h1>{{ hotel.name }}</h1>
+<p class="muted">
+  {{ track.los.replace('_', ' ') }} · {{ market }} · prices in EUR, ticket priced separately
+</p>
+
+{% set priced = series|selectattr('price')|list %}
+{% set cheapest = priced|map(attribute='price')|min if priced else None %}
+{% set low = series|map(attribute='all_time_low')|select('ne', none)|min if series else None %}
+
+<div class="facts">
+  <div><span class="k">Cheapest now</span><span class="v">{{ cheapest|money }}</span></div>
+  <div><span class="k">All-time low</span><span class="v">{{ low|money }}</span></div>
+  <div><span class="k">Dates tracked</span><span class="v">{{ series|length }}</span></div>
+  <div><span class="k">Last check</span><span class="v">{{ last_success|ago }}</span></div>
+</div>
+
+<section class="panel">
+  <h2>Price over time</h2>
+  {% if chart %}
+  <div class="chart-wrap">
+    <canvas id="price-chart" data-series='{{ chart|tojson }}' height="320"></canvas>
+  </div>
+  <p class="hint">One line per arrival date{% if skipped %}; showing the {{ chart|length }}
+    cheapest of {{ chart|length + skipped }} tracked dates{% endif %}. Step lines: a price
+    holds until the next observation.</p>
+  {% else %}
+  <p class="muted">No prices recorded yet. The first successful check will start the lines.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Arrivals</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Arrival</th>
+          <th class="num">Package</th>
+          <th class="num">vs previous</th>
+          <th class="num">All-time low</th>
+          <th class="num">Tickets</th>
+          <th class="num">Hotel only</th>
+          <th>Seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in series %}
+        <tr>
+          <td class="nowrap">{{ row.arrival|day }}</td>
+          <td class="num">
+            {% if row.price is not none %}
+              <strong>{{ row.price|money(row.currency) }}</strong>
+            {% elif row.observed_at %}
+              <span class="muted">sold out</span>
+            {% else %}
+              <span class="muted" title="Not sellable for this party, or not fetched yet">not seen</span>
+            {% endif %}
+          </td>
+          <td class="num {{ 'up' if row.price and row.previous_price and row.price > row.previous_price else ('down' if row.price and row.previous_price and row.price < row.previous_price else '') }}">
+            {{ row.price|delta(row.previous_price) }}
+          </td>
+          <td class="num">{{ row.all_time_low|money(row.currency) }}</td>
+          <td class="num">{{ row.ticket|money(row.currency) }}</td>
+          <td class="num">
+            {% if row.implied is not none %}
+              {{ row.implied|money(row.currency) }}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td>{{ row.observed_at|ago }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">Tickets are the same park-hopper product for every hotel, priced for this
+    party and stay length. "Hotel only" is the package minus that ticket price — an implied
+    figure, not a quote you can book.</p>
+</section>
+{% endblock %}

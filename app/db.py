@@ -147,8 +147,14 @@ SCHEMA_V1: tuple[str, ...] = (
 
 
 def connect(path: str | Path) -> sqlite3.Connection:
-    """Open (and migrate) a database. `:memory:` is allowed for tests."""
-    conn = sqlite3.connect(str(path))
+    """Open (and migrate) a database. `:memory:` is allowed for tests.
+
+    ``check_same_thread=False`` because the dashboard's request handlers and
+    the scheduler share one connection. They all run on one event loop, and
+    every statement here is short and synchronous, so nothing interleaves
+    inside a transaction. WAL keeps readers out of the writer's way.
+    """
+    conn = sqlite3.connect(str(path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")

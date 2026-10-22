@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Health · parkhotelchecker{% endblock %}
+
+{% block content %}
+<h1>Health</h1>
+
+<div class="facts">
+  <div><span class="k">Last successful check</span>
+    <span class="v">{{ age|ago }}</span></div>
+  <div><span class="k">Absolute time</span>
+    <span class="v">{{ last_success|local }}</span></div>
+</div>
+
+{% if age and age.total_seconds() > 12 * 3600 %}
+<p class="flash bad">
+  Nothing has succeeded for {{ age|ago }}. A poll runs every minute and the primary market is
+  due every six hours, so this is louder than it looks: something is failing. Check the errors
+  below.
+</p>
+{% endif %}
+
+<section>
+  <h2>Sources</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Source</th><th>Last success</th><th class="num">Consecutive failures</th><th>Last error</th></tr>
+      </thead>
+      <tbody>
+        {% for row in health %}
+        <tr>
+          <td>{{ row.source }}</td>
+          <td>{{ row.last_success_at|local if row.last_success_at else 'never' }}</td>
+          <td class="num {{ 'up' if row.consecutive_failures else '' }}">{{ row.consecutive_failures }}</td>
+          <td class="small">
+            {% if row.last_error %}
+              <span class="muted">{{ row.last_error_at|local }}</span><br>{{ row.last_error }}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">No checks recorded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Recent failures</h2>
+  {% if failures %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>When</th><th>Source</th><th>Key</th><th>Status</th><th>Error</th></tr></thead>
+      <tbody>
+        {% for row in failures %}
+        <tr>
+          <td class="nowrap">{{ row.requested_at|local }}</td>
+          <td>{{ row.source }}</td>
+          <td class="small mono">{{ row.key }}</td>
+          <td>{{ row.status or '—' }}</td>
+          <td class="small">{{ row.error }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">None. Good.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Recent requests</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>When</th><th>Source</th><th>Key</th><th>Result</th></tr></thead>
+      <tbody>
+        {% for row in polls %}
+        <tr>
+          <td class="nowrap">{{ row.requested_at|local }}</td>
+          <td>{{ row.source }}</td>
+          <td class="small mono">{{ row.key }}</td>
+          <td>{% if row.ok %}<span class="badge on">ok</span>{% else %}<span class="badge bad">failed</span>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">No requests yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -183,3 +183,32 @@ def test_shortlist_can_be_toggled(conn: sqlite3.Connection) -> None:
         )
     }
     assert rows == {"DCHH": 1, "DSFH": 1}
+
+
+def test_children_under_three_are_left_out_of_the_price_request(
+    conn: sqlite3.Connection,
+) -> None:
+    """Under-3s are free and have no field upstream, so they are not in the party."""
+    start = start_date()
+    toddler = (start - timedelta(days=800)).isoformat()
+
+    track_id = tracks.create_track(conn, spec(start=start, child_birthdates=(toddler,)))
+
+    party = conn.execute(
+        "SELECT p.* FROM party p JOIN track t ON t.party_id = p.id WHERE t.id = ?",
+        (track_id,),
+    ).fetchone()
+    assert party["adults"] == 2
+    assert party["child_birthdates"] == "[]"
+
+
+def test_a_child_who_turns_three_during_the_window_is_refused(
+    conn: sqlite3.Connection,
+) -> None:
+    start = start_date()
+    turns_three = start - timedelta(days=3 * 365) + timedelta(days=3)
+
+    with pytest.raises(ValueError, match="turns 3 during the window"):
+        tracks.create_track(
+            conn, spec(start=start, end=start + timedelta(days=6), child_birthdates=(turns_three.isoformat(),))
+        )

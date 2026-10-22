@@ -222,9 +222,13 @@ async def _ensure_products(
             continue
 
         try:
-            discovered = await tickets.discover_product_codes(
-                client, market=market, unique_id=str(uuid.uuid4())
-            )
+            # The category endpoint only answers a browser-like UA, and can take
+            # close to a minute. A short-lived slow client keeps that timeout
+            # from leaking into every price request.
+            async with create_client(slow=True) as discovery_client:
+                discovered = await tickets.discover_product_codes(
+                    discovery_client, market=market, unique_id=str(uuid.uuid4())
+                )
             chosen = tickets.select_product(discovered, duration_days=duration)
         except (UpstreamError, ShapeError) as exc:
             _record_failure(conn, "plu", market, exc, now)

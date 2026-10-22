@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}New track · parkhotelchecker{% endblock %}
+
+{% block content %}
+<h1>New track</h1>
+<p class="muted">
+  A track follows one holiday shape over an arrival window. Party, length of stay and
+  markets are fixed once it exists; the window can be trimmed or extended later.
+  Booking horizon right now: <strong>{{ horizon|day }}</strong>.
+</p>
+
+<form method="post" action="/tracks" class="panel">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+
+  <fieldset>
+    <legend>Name</legend>
+    <label class="field">
+      <span>What is this trip?</span>
+      <input type="text" name="name" value="{{ form.name }}" required maxlength="80"
+             placeholder="February half term">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Party</legend>
+    <div class="grid">
+      <label class="field">
+        <span>Adults</span>
+        <select name="adults">
+          {% for n in range(1, 7) %}
+          <option value="{{ n }}" {{ 'selected' if form.adults|int == n }}>{{ n }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% for birthdate in form.children %}
+      <label class="field">
+        <span>Child {{ loop.index }} birthdate</span>
+        <input type="date" name="child" value="{{ birthdate }}">
+      </label>
+      {% endfor %}
+    </div>
+    <p class="hint">Children under 3 on the arrival date travel free and are left out of the
+      price request. Leave a field empty if you have fewer children.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Dates</legend>
+    <div class="grid">
+      <label class="field">
+        <span>First arrival</span>
+        <input type="date" name="arrival_start" value="{{ form.arrival_start }}" required>
+      </label>
+      <label class="field">
+        <span>Last arrival</span>
+        <input type="date" name="arrival_end" value="{{ form.arrival_end }}" required>
+      </label>
+      <label class="field">
+        <span>Length of stay</span>
+        <select name="los">
+          {% for los in los_choices %}
+          <option value="{{ los }}" {{ 'selected' if form.los == los }}>
+            {{ los.replace('_', ' ') }}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="hint">At most 31 arrival dates per track.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Hotels to alert on</legend>
+    <p class="hint">All 16 hotels are polled, whichever you tick. Ticking decides which ones
+      may send you a message.</p>
+    <div class="checks">
+      {% for hotel in hotels %}
+      <label class="check">
+        <input type="checkbox" name="shortlist" value="{{ hotel.code }}"
+               {{ 'checked' if hotel.code in form.shortlist }}>
+        <span>{{ hotel.name }}
+          <span class="muted small">{{ 'on-site' if hotel.kind == 'onsite' else 'partner' }}{% if hotel.seasonal %} · seasonal{% endif %}</span>
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Markets</legend>
+    <p class="hint">Prices come from the Spanish site, which is the one you book through.
+      Canaries are checked once a day to tell you if another market undercuts it.</p>
+    <label class="check">
+      <input type="checkbox" checked disabled>
+      <span>Spain (es-es) — primary, every 6 hours</span>
+    </label>
+    {% for canary in canaries %}
+    <label class="check">
+      <input type="checkbox" name="market" value="{{ canary }}"
+             {{ 'checked' if canary in form.markets }}>
+      <span>{{ canary }} — canary, daily</span>
+    </label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Alerts</legend>
+    <label class="field narrow">
+      <span>Minimum change to alert (€)</span>
+      <input type="number" name="min_delta" value="{{ form.min_delta }}" min="0" step="1">
+    </label>
+    <p class="hint">Any change at or above this, in either direction, plus any new all-time low
+      and any sold-out / back-available flip.</p>
+  </fieldset>
+
+  <div class="actions">
+    <button type="submit">Create track</button>
+    <a class="button ghost" href="/">Cancel</a>
+  </div>
+</form>
+{% endblock %}

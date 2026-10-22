@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}parkhotelchecker{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">parkhotelchecker</a>
+    <nav>
+      <a href="/">Tracks</a>
+      <a href="/tracks/new">New track</a>
+      <a href="/health">Health</a>
+    </nav>
+  </header>
+
+  <main>
+    {% if msg %}<p class="flash ok">{{ msg }}</p>{% endif %}
+    {% if err %}<p class="flash bad">{{ err }}</p>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <span>Last successful check:
+      <strong>{{ last_success|ago }}</strong>
+      {% if last_success %}<span class="muted">({{ last_success|local }})</span>{% endif %}
+    </span>
+    <a href="/health">details</a>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
