@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parkhotelchecker"
+version = "0.1.0"
+description = "Disneyland Paris hotel+package price tracker (personal, non-commercial)"
+requires-python = ">=3.14"
+dependencies = [
+    "httpx>=0.28",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "jinja2>=3.1",
+    "bcrypt>=4.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.setuptools]
+packages = ["app", "app.dlp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
