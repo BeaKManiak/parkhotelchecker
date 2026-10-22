@@ -78,6 +78,12 @@ def make_track(conn: sqlite3.Connection, *, arrivals: list[date], hotel: str = "
     )
 
 
+def record(conn, cal, *, now=None):
+    """Record a package calendar for the party in the database."""
+    party_id = conn.execute("SELECT id FROM party").fetchone()["id"]
+    return store.record_package_calendar(conn, cal, party_id=party_id, now=now)
+
+
 def observation_count(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) AS n FROM observation").fetchone()["n"])
 
@@ -88,7 +94,7 @@ def test_first_poll_writes_one_row_per_arrival(conn: sqlite3.Connection) -> None
     make_track(conn, arrivals=arrivals)
 
     cal = package_calendar({a: Decimal("600.00") for a in arrivals})
-    written = store.record_package_calendar(conn, cal)
+    written = record(conn, cal)
 
     assert len(written) == 3
     assert {w.kind for w in written} == {"first"}
@@ -102,10 +108,10 @@ def test_replaying_the_same_response_writes_nothing(conn: sqlite3.Connection) ->
     cal = package_calendar({a: Decimal("600.00") for a in arrivals})
 
     now = datetime(2026, 10, 22, 10, tzinfo=timezone.utc)
-    store.record_package_calendar(conn, cal, now=now)
+    record(conn, cal, now=now)
 
     for hours in (1, 2, 3):
-        written = store.record_package_calendar(
+        written = record(
             conn, cal, now=now + timedelta(hours=hours)
         )
         assert written == []
@@ -119,12 +125,12 @@ def test_one_cent_of_movement_writes_exactly_one_row(conn: sqlite3.Connection) -
     make_track(conn, arrivals=arrivals)
 
     now = datetime(2026, 10, 22, 10, tzinfo=timezone.utc)
-    store.record_package_calendar(
+    record(
         conn, package_calendar({a: Decimal("600.00") for a in arrivals}), now=now
     )
 
     moved = {arrivals[0]: Decimal("600.01"), arrivals[1]: Decimal("600.00")}
-    written = store.record_package_calendar(
+    written = record(
         conn, package_calendar(moved), now=now + timedelta(hours=1)
     )
 
@@ -143,15 +149,15 @@ def test_a_day_of_silence_writes_one_heartbeat(conn: sqlite3.Connection) -> None
     cal = package_calendar({a: Decimal("600.00") for a in arrivals})
 
     now = datetime(2026, 10, 22, 10, tzinfo=timezone.utc)
-    store.record_package_calendar(conn, cal, now=now)
+    record(conn, cal, now=now)
 
-    written = store.record_package_calendar(conn, cal, now=now + timedelta(hours=25))
+    written = record(conn, cal, now=now + timedelta(hours=25))
 
     assert len(written) == 2
     assert {w.kind for w in written} == {"heartbeat"}
 
     # ...and only once: a second poll inside the next 24h writes nothing.
-    assert store.record_package_calendar(conn, cal, now=now + timedelta(hours=26)) == []
+    assert record(conn, cal, now=now + timedelta(hours=26)) == []
 
 
 def test_a_disappearing_date_becomes_sold_out(conn: sqlite3.Connection) -> None:
@@ -160,12 +166,12 @@ def test_a_disappearing_date_becomes_sold_out(conn: sqlite3.Connection) -> None:
     make_track(conn, arrivals=arrivals)
 
     now = datetime(2026, 10, 22, 10, tzinfo=timezone.utc)
-    store.record_package_calendar(
+    record(
         conn, package_calendar({a: Decimal("600.00") for a in arrivals}), now=now
     )
 
     # The upstream simply omits one date.
-    written = store.record_package_calendar(
+    written = record(
         conn, package_calendar({arrivals[1]: Decimal("600.00")}), now=now + timedelta(hours=6)
     )
 
@@ -182,7 +188,7 @@ def test_never_seen_date_is_not_recorded_as_sold_out(conn: sqlite3.Connection) -
     make_track(conn, arrivals=arrivals)
 
     # Upstream returns nothing at all - e.g. the party is too big for the hotel.
-    written = store.record_package_calendar(conn, package_calendar({}))
+    written = record(conn, package_calendar({}))
     assert written == []
     assert observation_count(conn) == 0
 
@@ -193,9 +199,9 @@ def test_sold_out_then_back_available(conn: sqlite3.Connection) -> None:
     make_track(conn, arrivals=arrivals)
 
     now = datetime(2026, 10, 22, 10, tzinfo=timezone.utc)
-    store.record_package_calendar(conn, package_calendar({base: Decimal("600.00")}), now=now)
-    store.record_package_calendar(conn, package_calendar({}), now=now + timedelta(hours=1))
-    written = store.record_package_calendar(
+    record(conn, package_calendar({base: Decimal("600.00")}), now=now)
+    record(conn, package_calendar({}), now=now + timedelta(hours=1))
+    written = record(
         conn, package_calendar({base: Decimal("650.00")}), now=now + timedelta(hours=2)
     )
 
@@ -203,6 +209,42 @@ def test_sold_out_then_back_available(conn: sqlite3.Connection) -> None:
     assert written[0].available is True
     assert written[0].price == Decimal("650.00")
     assert written[0].previous_price is None
+
+
+def test_a_response_for_one_party_never_touches_another(conn: sqlite3.Connection) -> None:
+    """A 2a1c quote must not be written onto a 2a0c series."""
+    base = month_start()
+    arrivals = [base]
+    couple = make_track(conn, arrivals=arrivals)
+    family = tracks.create_track(
+        conn,
+        tracks.TrackSpec(
+            name="family",
+            adults=2,
+            child_birthdates=("2020-01-01",),
+            arrival_start=base,
+            arrival_end=base,
+            hotels=(("DCHH", True),),
+        ),
+    )
+
+    couple_party = conn.execute(
+        "SELECT party_id FROM track WHERE id = ?", (couple,)
+    ).fetchone()["party_id"]
+    family_party = conn.execute(
+        "SELECT party_id FROM track WHERE id = ?", (family,)
+    ).fetchone()["party_id"]
+    assert couple_party != family_party
+
+    written = store.record_package_calendar(
+        conn, package_calendar({base: Decimal("812.62")}), party_id=couple_party
+    )
+
+    assert len(written) == 1
+    family_series = conn.execute(
+        "SELECT id FROM series WHERE party_id = ?", (family_party,)
+    ).fetchone()["id"]
+    assert store.latest_observation(conn, family_series) is None
 
 
 def test_two_tracks_share_one_series_and_one_history(conn: sqlite3.Connection) -> None:
@@ -214,7 +256,7 @@ def test_two_tracks_share_one_series_and_one_history(conn: sqlite3.Connection) -
     assert first != second
     assert conn.execute("SELECT COUNT(*) AS n FROM series").fetchone()["n"] == 1
 
-    store.record_package_calendar(conn, package_calendar({base: Decimal("600.00")}))
+    record(conn, package_calendar({base: Decimal("600.00")}))
 
     # Both tracks now see the same observation, because they point at one series.
     assert observation_count(conn) == 1

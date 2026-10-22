@@ -175,9 +175,18 @@ def _record(
 
 
 def record_package_calendar(
-    conn: sqlite3.Connection, calendar: PackageCalendar, *, now: datetime | None = None
+    conn: sqlite3.Connection,
+    calendar: PackageCalendar,
+    *,
+    party_id: int,
+    now: datetime | None = None,
 ) -> list[Written]:
-    """Apply one month's package response to every series it covers."""
+    """Apply one month's package response to every series it covers.
+
+    ``party_id`` is part of the filter, not decoration: one hotel-month can be
+    watched by two tracks with different parties, and a 2a1c price must never
+    be written onto a 2a0c series.
+    """
     now = now or utcnow()
     month_start = calendar.month.replace(day=1)
     month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
@@ -185,7 +194,7 @@ def record_package_calendar(
     rows = conn.execute(
         """
         SELECT id, arrival_date FROM series
-        WHERE hotel_code = ? AND market = ? AND los = ?
+        WHERE hotel_code = ? AND market = ? AND los = ? AND party_id = ?
           AND arrival_date BETWEEN ? AND ?
         ORDER BY arrival_date
         """,
@@ -193,6 +202,7 @@ def record_package_calendar(
             calendar.hotel,
             calendar.market,
             calendar.los,
+            party_id,
             month_start.isoformat(),
             month_end.isoformat(),
         ),
