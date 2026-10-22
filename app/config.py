@@ -76,14 +76,27 @@ def park_days(los: str) -> int:
 
 # --- Horizon ---------------------------------------------------------------
 
-# Observed on 2026-10-21: packages sell to 2028-03-30, ticket calendars to
-# 2028-03-31. Treated as a soft ceiling: requests past it are skipped and
-# logged, never treated as failures.
-HORIZON_LATEST: date = date(2028, 3, 30)
+# Observed on 2026-10-22: packages sell to 2028-03-30, ticket calendars to
+# 2028-03-31 - a rolling window of roughly 17 months. The API is authoritative;
+# this is only a planning bound so we don't request empty months forever. It is
+# computed from *today*, never hardcoded, or the tool would quietly stop
+# accepting valid dates once that date passes.
+HORIZON_MONTHS = 17
+MAX_ARRIVALS = 31
 
 
-def within_horizon(d: date) -> bool:
-    return date.today() <= d <= HORIZON_LATEST
+def horizon_latest(today: date | None = None) -> date:
+    today = today or date.today()
+    month_index = today.month - 1 + HORIZON_MONTHS
+    year = today.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(today.day, 28)
+    return date(year, month, day)
+
+
+def within_horizon(d: date, today: date | None = None) -> bool:
+    today = today or date.today()
+    return today <= d <= horizon_latest(today)
 
 
 # --- Money -----------------------------------------------------------------

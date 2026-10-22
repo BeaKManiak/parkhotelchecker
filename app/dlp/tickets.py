@@ -53,6 +53,8 @@ class TicketCalendar:
     market: str
     currency: str
     product_type: str
+    duration_days: int
+    parks: int
     days: Mapping[date, TicketDay]
 
 
@@ -208,12 +210,21 @@ async def fetch_calendar(
     )
     body = await dlp_http.post_json(client, config.TICKET_CALENDAR_URL, payload)
     return parse_calendar_payload(
-        body, market=market, product_type=product.product_type
+        body,
+        market=market,
+        product_type=product.product_type,
+        duration_days=product.duration_days,
+        parks=product.parks,
     )
 
 
 def parse_calendar_payload(
-    payload: Mapping[str, Any], *, market: str, product_type: str
+    payload: Mapping[str, Any],
+    *,
+    market: str,
+    product_type: str,
+    duration_days: int,
+    parks: int = config.PARKS,
 ) -> TicketCalendar:
     url = config.TICKET_CALENDAR_URL
     calendar = payload.get("calendar")
@@ -254,5 +265,7 @@ def parse_calendar_payload(
         market=market,
         currency=config.MARKET_CURRENCY[market],
         product_type=product_type,
+        duration_days=duration_days,
+        parks=parks,
         days=days,
     )

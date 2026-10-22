@@ -55,7 +55,7 @@ def test_missing_selection_config_is_a_shape_error() -> None:
 
 def test_single_day_two_park_prices_and_party_total() -> None:
     cal = tickets.parse_calendar_payload(
-        load("tickets_es_1d2p_2026-11.json"), market="es-es", product_type="TKITL14DJ"
+        load("tickets_es_1d2p_2026-11.json"), market="es-es", product_type="TKITL14DJ", duration_days=1
     )
     day = cal.days[date(2026, 11, 9)]
 
@@ -68,7 +68,7 @@ def test_single_day_two_park_prices_and_party_total() -> None:
 
 def test_three_day_total_is_the_whole_ticket() -> None:
     cal = tickets.parse_calendar_payload(
-        load("tickets_es_3d2p_2026-11-12.json"), market="es-es", product_type="TKITL3NP"
+        load("tickets_es_3d2p_2026-11-12.json"), market="es-es", product_type="TKITL34NP", duration_days=3
     )
     day = cal.days[date(2026, 11, 9)]
 
@@ -80,7 +80,7 @@ def test_three_day_total_is_the_whole_ticket() -> None:
 
 def test_party_total_uses_both_rates() -> None:
     cal = tickets.parse_calendar_payload(
-        load("tickets_es_1d2p_2026-11.json"), market="es-es", product_type="TKITL14DJ"
+        load("tickets_es_1d2p_2026-11.json"), market="es-es", product_type="TKITL14DJ", duration_days=1
     )
     day = cal.days[date(2026, 11, 9)]
     assert day.total(2, 0) == Decimal("218.00")
@@ -89,10 +89,10 @@ def test_party_total_uses_both_rates() -> None:
 
 def test_missing_calendar_is_a_shape_error() -> None:
     with pytest.raises(ShapeError):
-        tickets.parse_calendar_payload({}, market="es-es", product_type="TKITL14DJ")
+        tickets.parse_calendar_payload({}, market="es-es", product_type="TKITL14DJ", duration_days=1)
 
 
 def test_unpriced_product_is_a_shape_error() -> None:
     payload = {"calendar": [{"date": "2026-11-09", "products": {"OTHER": {}}}]}
     with pytest.raises(ShapeError):
-        tickets.parse_calendar_payload(payload, market="es-es", product_type="TKITL14DJ")
+        tickets.parse_calendar_payload(payload, market="es-es", product_type="TKITL14DJ", duration_days=1)
