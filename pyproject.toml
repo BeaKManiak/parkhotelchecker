@@ -23,7 +23,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["app", "app.dlp", "app.tracking", "app.web"]
+packages = ["app", "app.alerts", "app.dlp", "app.tracking", "app.web"]
 
 [tool.setuptools.package-data]
 "app.web" = ["templates/*.html", "static/*"]

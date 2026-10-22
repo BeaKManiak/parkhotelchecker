@@ -17,7 +17,7 @@ import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_V1: tuple[str, ...] = (
     """
@@ -146,6 +146,20 @@ SCHEMA_V1: tuple[str, ...] = (
 )
 
 
+SCHEMA_V2: tuple[str, ...] = (
+    # Tiny key/value shelf for "have we already said this?". Kept out of the
+    # domain tables on purpose: it is notification bookkeeping, not price data,
+    # and losing it costs at most one repeated message.
+    """
+    CREATE TABLE alert_state (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TEXT NOT NULL
+    )
+    """,
+)
+
+
 def connect(path: str | Path) -> sqlite3.Connection:
     """Open (and migrate) a database. `:memory:` is allowed for tests.
 
@@ -169,6 +183,9 @@ def migrate(conn: sqlite3.Connection) -> None:
         return
     if version < 1:
         for statement in SCHEMA_V1:
+            conn.execute(statement)
+    if version < 2:
+        for statement in SCHEMA_V2:
             conn.execute(statement)
     conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.commit()

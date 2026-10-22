@@ -16,7 +16,7 @@ import pytest
 from app import db
 from app.dlp.http import ShapeError, UpstreamError
 from app.dlp.packages import PackageCalendar, PackageDay
-from app.dlp.tickets import ProductCode, TicketCalendar, TicketDay
+from app.dlp.tickets import TicketCalendar, TicketDay
 from app.tracking import planner, poller, store, tracks
 from app.tracking.planner import PackageTask, Plan, TicketTask
 

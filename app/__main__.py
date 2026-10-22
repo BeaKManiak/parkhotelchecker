@@ -11,7 +11,11 @@ Environment:
   PORT                    default 8080
   DASHBOARD_USER          required
   DASHBOARD_PASSWORD_HASH required (python -m app.web.auth hash)
+  TELEGRAM_BOT_TOKEN      optional; without it alerts are logged, not sent
+  TELEGRAM_CHAT_IDS       optional; comma-separated chat ids
+  BACKUP_DIR              default <db folder>/backups; empty string disables
   POLL_INTERVAL_SECONDS   default 60 (how often to *look* for due work)
+  ALLOW_PUBLIC_BIND       only for containers; see _dashboard_host
   LOG_LEVEL               default INFO
 """
 
@@ -26,6 +30,8 @@ from pathlib import Path
 import uvicorn
 
 from app import db
+from app.alerts.notifier import Notifier
+from app.alerts.telegram import from_env as telegram_from_env
 from app.dlp.http import create_client
 from app.tracking.scheduler import Scheduler
 from app.web.app import create_app
@@ -43,10 +49,11 @@ def _env_int(name: str, default: int) -> int:
 
 def _dashboard_host() -> str:
     host = os.environ.get("HOST", "127.0.0.1").strip()
-    if host in {"0.0.0.0", "::", "[::]"}:
+    if host in {"0.0.0.0", "::", "[::]"} and os.environ.get("ALLOW_PUBLIC_BIND") != "1":
         raise SystemExit(
             "refusing to bind HOST=0.0.0.0: this dashboard is LAN-only.\n"
-            "Set HOST to the NAS's LAN address (for example 192.168.1.20)."
+            "Set HOST to the NAS's LAN address (for example 192.168.1.20).\n"
+            "Containers that publish only the LAN IP may set ALLOW_PUBLIC_BIND=1."
         )
     return host
 
@@ -69,8 +76,23 @@ async def main() -> int:
     host = _dashboard_host()
     port = _env_int("PORT", 8080)
 
+    backup_dir = os.environ.get("BACKUP_DIR", str(db_path.parent / "backups"))
+    backup_dir = "" if db_path == Path(":memory:") else backup_dir
+
     async with create_client() as client:
-        scheduler = Scheduler(conn, client, interval_seconds=interval)
+        telegram = telegram_from_env(client)
+        notifier = Notifier(conn, telegram)
+        if telegram is None:
+            log.warning(
+                "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_IDS not set: alerts will be logged, not sent"
+            )
+        scheduler = Scheduler(
+            conn,
+            client,
+            interval_seconds=interval,
+            notifier=notifier,
+            backup_dir=backup_dir,
+        )
         app = create_app(conn=conn, scheduler=scheduler)
         server = uvicorn.Server(
             uvicorn.Config(
@@ -83,6 +105,7 @@ async def main() -> int:
             )
         )
         log.info("dashboard on http://%s:%d (basic auth required)", host, port)
+        log.info("nightly backups: %s", backup_dir or "disabled")
         await server.serve()
 
     conn.close()

@@ -336,7 +336,9 @@ def health(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def last_success(conn: sqlite3.Connection) -> datetime | None:
-    row = conn.execute("SELECT MAX(last_success_at) AS at FROM health").fetchone()
+    row = conn.execute(
+        "SELECT MAX(last_success_at) AS at FROM health WHERE source <> 'telegram'"
+    ).fetchone()
     return _dt(row["at"])
 
 

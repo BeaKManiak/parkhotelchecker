@@ -43,6 +43,10 @@ class PollResult:
     written: list[Written] = field(default_factory=list)
     changes: list[Written] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    # A shape error means the upstream answered something we do not understand.
+    # That is a different failure from a timeout and is alerted on immediately,
+    # not after three consecutive polls.
+    shape_errors: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -130,6 +134,8 @@ async def execute(
                 _record_failure(conn, "packages", task.key, exc, now)
                 result.packages_failed += 1
                 result.errors.append(f"{task.key}: {exc}")
+                if isinstance(exc, ShapeError):
+                    result.shape_errors.append(f"packages {task.key}: {exc}")
                 return
 
             written = store.record_package_calendar(
@@ -155,6 +161,8 @@ async def execute(
                 _record_failure(conn, "tickets", task.key, exc, now)
                 result.tickets_failed += 1
                 result.errors.append(f"{task.key}: {exc}")
+                if isinstance(exc, ShapeError):
+                    result.shape_errors.append(f"tickets {task.key}: {exc}")
                 return
 
             written = store.record_ticket_calendar(
@@ -233,6 +241,8 @@ async def _ensure_products(
         except (UpstreamError, ShapeError) as exc:
             _record_failure(conn, "plu", market, exc, now)
             result.errors.append(f"plu {market}: {exc}")
+            if isinstance(exc, ShapeError):
+                result.shape_errors.append(f"plu {market}: {exc}")
             continue
 
         _store_products(conn, market, discovered, now)

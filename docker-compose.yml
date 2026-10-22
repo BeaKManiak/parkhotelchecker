@@ -1,0 +1,44 @@
+# Build and run on the NAS, no registry:
+#   docker compose build && docker compose up -d
+#
+# The dashboard is LAN-only in two independent ways: HOST/ALLOW_PUBLIC_BIND
+# inside the container, and the port mapping below, which publishes only
+# LAN_BIND_IP. Set LAN_BIND_IP in .env; the default is loopback, which is safe
+# and deliberately unreachable from your phone until you change it.
+
+services:
+  app:
+    build: .
+    image: parkhotelchecker:local
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      TZ: Europe/Madrid
+      HOST: 0.0.0.0
+      ALLOW_PUBLIC_BIND: "1"
+      PORT: "8080"
+      DB_PATH: /data/parkhotelchecker.db
+      BACKUP_DIR: /data/backups
+    ports:
+      - "${LAN_BIND_IP:-127.0.0.1}:8080:8080"
+    volumes:
+      - "${DATA_DIR:-./data}:/data"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5).status == 200 else 1)"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

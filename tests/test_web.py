@@ -385,6 +385,24 @@ def test_health_page_reports_last_success(client) -> None:
     assert "boom" in response.text
 
 
+def test_telegram_success_does_not_look_like_a_price_check(client) -> None:
+    http, conn, _ = client
+    now = datetime.now(timezone.utc)
+    conn.execute(
+        "INSERT INTO health (source, last_success_at, consecutive_failures) VALUES ('packages', ?, 0)",
+        ((now - timedelta(hours=6)).isoformat(timespec="seconds"),),
+    )
+    conn.execute(
+        "INSERT INTO health (source, last_success_at, consecutive_failures) VALUES ('telegram', ?, 0)",
+        (now.isoformat(timespec="seconds"),),
+    )
+    conn.commit()
+
+    response = http.get("/", auth=AUTH)
+
+    assert "6 h ago" in response.text
+
+
 def test_too_many_failed_logins_are_braked(client) -> None:
     http, _, _ = client
     for _ in range(auth.MAX_FAILURES):
