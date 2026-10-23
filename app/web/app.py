@@ -30,6 +30,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app import config
 from app.web import auth
 from app.web.routes import build_router
 
@@ -146,7 +147,13 @@ def create_app(
 
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
     templates.env.filters.update(
-        money=_money, local=_local, day=_day, ago=_ago, delta=_delta, party=_party
+        money=_money,
+        local=_local,
+        day=_day,
+        ago=_ago,
+        delta=_delta,
+        party=_party,
+        los=config.los_label,
     )
 
     csrf_token = hmac.new(

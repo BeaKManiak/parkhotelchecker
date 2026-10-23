@@ -151,6 +151,77 @@ def test_the_new_track_form_lists_every_hotel(client) -> None:
     assert "Les Villages Nature Paris" in response.text
 
 
+def test_the_new_track_form_explains_the_party_and_check_in_window(client) -> None:
+    http, _, _ = client
+    response = http.get("/tracks/new", auth=AUTH)
+    text = response.text
+
+    assert "Earliest check-in" in text
+    assert "Latest check-in" in text
+    assert "2 nights · 3 park days" in text
+    assert "A room holds up to 7 people" in text
+    assert "Disney hotels (on-site)" in text
+    assert "Partner hotels" in text
+    assert 'data-check-all="shortlist"' in text
+    # The shortlist starts empty; all hotels are tracked regardless.
+    assert re.search(r'name="shortlist"[^>]*checked', text) is None
+
+
+def test_children_count_must_match_the_birthdates(client) -> None:
+    http, _, _ = client
+    page = http.get("/tracks/new", auth=AUTH)
+    token = csrf_from(page.text)
+    start = date.today() + timedelta(days=40)
+
+    response = http.post(
+        "/tracks",
+        auth=AUTH,
+        data={
+            "csrf": token,
+            "name": "Mismatch",
+            "adults": "2",
+            "children_count": "2",
+            "child": ["2018-06-01"],
+            "los": "2n_3j",
+            "arrival_start": start.isoformat(),
+            "arrival_end": (start + timedelta(days=2)).isoformat(),
+            "min_delta": "20",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert "you said 2 children but gave 1 birthdate" in response.text
+
+
+def test_a_room_cannot_hold_more_than_seven_people(client) -> None:
+    http, conn, _ = client
+    page = http.get("/tracks/new", auth=AUTH)
+    token = csrf_from(page.text)
+    start = date.today() + timedelta(days=40)
+
+    response = http.post(
+        "/tracks",
+        auth=AUTH,
+        data={
+            "csrf": token,
+            "name": "Too many",
+            "adults": "7",
+            "children_count": "1",
+            "child": ["2018-06-01"],
+            "los": "2n_3j",
+            "arrival_start": start.isoformat(),
+            "arrival_end": (start + timedelta(days=2)).isoformat(),
+            "min_delta": "20",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert "a room holds at most 7" in response.text
+    assert conn.execute("SELECT COUNT(*) AS n FROM track").fetchone()["n"] == 0
+
+
 def test_creating_a_track_redirects_to_it(client) -> None:
     http, conn, _ = client
     page = http.get("/tracks/new", auth=AUTH)
@@ -170,7 +241,8 @@ def test_creating_a_track_redirects_to_it(client) -> None:
             "min_delta": "25",
             "shortlist": ["DCHH", "STAY"],
             "market": ["en-gb"],
-            "child": ["2018-06-01", ""],
+            "children_count": "1",
+            "child": ["2018-06-01"],
         },
         follow_redirects=False,
     )
@@ -191,6 +263,35 @@ def test_creating_a_track_redirects_to_it(client) -> None:
         r["hotel_code"] for r in conn.execute("SELECT hotel_code FROM track_hotel")
     }
     assert tracked == {hotel.code for hotel in hotel_catalog.HOTELS}
+
+
+def test_a_track_can_start_with_no_alerting_hotels(client) -> None:
+    http, conn, _ = client
+    page = http.get("/tracks/new", auth=AUTH)
+    token = csrf_from(page.text)
+    start = date.today() + timedelta(days=40)
+
+    response = http.post(
+        "/tracks",
+        auth=AUTH,
+        data={
+            "csrf": token,
+            "name": "Silent at first",
+            "adults": "2",
+            "children_count": "0",
+            "los": "2n_3j",
+            "arrival_start": start.isoformat(),
+            "arrival_end": (start + timedelta(days=2)).isoformat(),
+            "min_delta": "20",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    shortlisted = conn.execute(
+        "SELECT COUNT(*) AS n FROM track_hotel WHERE shortlisted = 1"
+    ).fetchone()["n"]
+    assert shortlisted == 0
 
 
 def test_a_validation_error_re_renders_the_form_with_the_message(client) -> None:
@@ -242,6 +343,7 @@ def test_track_detail_shows_prices_and_the_window(client) -> None:
     assert response.status_code == 200
     assert "Disney Hotel Cheyenne" in response.text
     assert "€780.00" in response.text
+    assert "2 nights · 3 park days" in response.text
     assert "Alerting" in response.text
     assert "lowest yet" in response.text
 

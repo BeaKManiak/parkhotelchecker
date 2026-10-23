@@ -143,6 +143,8 @@ legend { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; col
 .checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 6px 18px; }
 .check { display: flex; gap: 9px; align-items: flex-start; font-size: 14px; padding: 3px 0; }
 .check input { margin-top: 3px; }
+.check-actions { margin: 2px 0 12px; }
+.check-actions button { font-size: 13px; padding: 5px 10px; }
 
 .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
 

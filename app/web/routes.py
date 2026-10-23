@@ -70,18 +70,20 @@ def build_router(*, require_user) -> APIRouter:
             form={
                 "name": "",
                 "adults": 2,
+                "children_count": 0,
                 "los": config.DEFAULT_LOS,
                 "arrival_start": tomorrow.isoformat(),
                 "arrival_end": (tomorrow + timedelta(days=6)).isoformat(),
                 "min_delta": "20",
                 "markets": ["es-es"],
-                "shortlist": ["DCHH", "DSFH"],
-                "children": ["", "", ""],
+                "shortlist": [],
+                "children": [""] * (config.MAX_PARTY - 1),
             },
             hotels=hotel_catalog.HOTELS,
             los_choices=config.VALID_LOS,
             horizon=config.horizon_latest(),
             canaries=config.CANARY_MARKETS,
+            max_party=config.MAX_PARTY,
         )
 
     @router.post("/tracks")
@@ -96,6 +98,7 @@ def build_router(*, require_user) -> APIRouter:
         market: list[str] | None = Form(None),
         shortlist: list[str] | None = Form(None),
         child: list[str] | None = Form(None),
+        children_count: int = Form(0),
         csrf: str = Form(""),
     ) -> Response:
         check_csrf(request, csrf)
@@ -109,6 +112,18 @@ def build_router(*, require_user) -> APIRouter:
                 markets.append((canary, 24))
 
         try:
+            if not 0 <= children_count <= config.MAX_PARTY - 1:
+                raise ValueError(
+                    f"children must be between 0 and {config.MAX_PARTY - 1}"
+                )
+            if len(children) != children_count:
+                given = len(children)
+                noun = "birthdate" if given == 1 else "birthdates"
+                raise ValueError(
+                    f"you said {children_count} children but gave "
+                    f"{given} {noun}"
+                )
+
             spec = tracks.TrackSpec(
                 name=name,
                 adults=adults,
@@ -135,12 +150,16 @@ def build_router(*, require_user) -> APIRouter:
                     "min_delta": min_delta,
                     "markets": market or [],
                     "shortlist": shortlist,
-                    "children": list(children) + [""] * max(0, 3 - len(children)),
+                    "children_count": children_count,
+                    "children": list(children)[: config.MAX_PARTY - 1]
+                    + [""]
+                    * max(0, config.MAX_PARTY - 1 - len(children)),
                 },
                 hotels=hotel_catalog.HOTELS,
                 los_choices=config.VALID_LOS,
                 horizon=config.horizon_latest(),
                 canaries=config.CANARY_MARKETS,
+                max_party=config.MAX_PARTY,
             )
 
         return RedirectResponse(

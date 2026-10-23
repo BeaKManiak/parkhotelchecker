@@ -145,13 +145,15 @@ your phone — that is deliberate, so an unfinished config fails closed.
 The dashboard is empty until you create a track. Click **New track** and fill
 in:
 
-- a name, the number of adults, and each child's birthdate (children under 3 on
-  the arrival date are free and are left out of the price request entirely);
-- the first and last arrival date, within the booking horizon shown on the
-  form (the window can cover at most 31 arrival dates);
-- the length of stay (default `2n/3j`);
+- a name, the number of adults and children, and a birthdate for each child
+  (a room holds at most 7 people, adults and children together; children under
+  3 are free and are left out of the price request entirely);
+- the earliest and latest **check-in** date, within the booking horizon shown on
+  the form (the window can cover at most 31 arrival dates; these are not
+  check-out dates);
+- the length of stay (default 2 nights, 3 park days);
 - which hotels are **shortlisted**. Shortlisting controls *who may alert you*;
-  all 16 hotels are polled regardless;
+  all 16 hotels are polled regardless, and none are selected by default;
 - optionally, canary markets. They are charted but never alerted;
 - the minimum change that deserves an alert (default €20). New all-time lows
   and sold-out / back-available flips alert regardless.

@@ -340,7 +340,7 @@ def _ticket_total(
 
 def _section_header(section: Section) -> str:
     return (
-        f"{section.track_name} · {section.los.replace('_', '/')}"
+        f"{section.track_name} · {config.los_label(section.los)}"
         f" · {section.adults}a{section.children}c"
     )
 

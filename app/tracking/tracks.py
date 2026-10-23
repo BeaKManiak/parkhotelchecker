@@ -78,6 +78,15 @@ def validate_spec(spec: TrackSpec, *, today: date | None = None) -> list[date]:
         raise ValueError("track needs a name")
     if spec.adults < 1:
         raise ValueError("at least one adult is required")
+    # Count every child here, including under-3s: they are free but still sleep
+    # in the room. chargeable_children() drops them later, so this check must
+    # come first or a party of eight would slip through.
+    party_size = spec.adults + len(spec.child_birthdates)
+    if party_size > config.MAX_PARTY:
+        raise ValueError(
+            f"{spec.adults} adults and {len(spec.child_birthdates)} children "
+            f"is {party_size} people; a room holds at most {config.MAX_PARTY}"
+        )
     if len(arrivals) > config.MAX_ARRIVALS:
         raise ValueError(
             f"window covers {len(arrivals)} arrival dates; the cap is {config.MAX_ARRIVALS}"

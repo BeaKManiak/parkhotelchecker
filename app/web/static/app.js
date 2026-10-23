@@ -100,7 +100,79 @@
     });
   }
 
+  function setupParty() {
+    var party = document.querySelector("[data-party]");
+    if (!party) return;
+
+    var adults = party.querySelector("[data-adults]");
+    var children = party.querySelector("[data-children]");
+    var fields = Array.prototype.slice.call(
+      party.querySelectorAll("[data-child-field]")
+    );
+    var maxParty = parseInt(party.getAttribute("data-max-party"), 10) || 7;
+
+    function syncFields() {
+      var count = parseInt(children.value, 10) || 0;
+      fields.forEach(function (field, index) {
+        var visible = index < count;
+        field.hidden = !visible;
+        var input = field.querySelector("input");
+        if (input) input.disabled = !visible;
+      });
+    }
+
+    function rebuildChoices() {
+      var maxChildren = Math.max(
+        0,
+        maxParty - (parseInt(adults.value, 10) || 1)
+      );
+      var selected = Math.min(
+        parseInt(children.value, 10) || 0,
+        maxChildren
+      );
+      children.innerHTML = "";
+      for (var n = 0; n <= maxChildren; n += 1) {
+        var option = document.createElement("option");
+        option.value = String(n);
+        option.textContent = String(n);
+        if (n === selected) option.selected = true;
+        children.appendChild(option);
+      }
+      syncFields();
+    }
+
+    adults.addEventListener("change", rebuildChoices);
+    children.addEventListener("change", syncFields);
+    rebuildChoices();
+  }
+
+  function setupCheckAll() {
+    function boxes(name) {
+      return Array.prototype.slice.call(
+        document.querySelectorAll('input[name="' + name + '"]')
+      );
+    }
+
+    document.querySelectorAll("[data-check-all]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        boxes(button.getAttribute("data-check-all")).forEach(function (box) {
+          box.checked = true;
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-check-none]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        boxes(button.getAttribute("data-check-none")).forEach(function (box) {
+          box.checked = false;
+        });
+      });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    setupParty();
+    setupCheckAll();
     var canvas = document.getElementById("price-chart");
     if (canvas) draw(canvas);
   });

@@ -146,7 +146,7 @@ def test_a_drop_larger_than_the_threshold_gets_a_line(conn: sqlite3.Connection) 
 
     assert message is not None
     assert "February" in message
-    assert "2n/3j" in message
+    assert "2 nights · 3 park days" in message
     assert "2a1c" in message
     assert "▼" in message
     assert "€820 → €770" in message

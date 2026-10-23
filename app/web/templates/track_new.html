@@ -23,35 +23,44 @@
 
   <fieldset>
     <legend>Party</legend>
-    <div class="grid">
+    <div class="grid" data-party data-max-party="{{ max_party }}">
       <label class="field">
         <span>Adults</span>
-        <select name="adults">
-          {% for n in range(1, 7) %}
+        <select name="adults" data-adults>
+          {% for n in range(1, max_party + 1) %}
           <option value="{{ n }}" {{ 'selected' if form.adults|int == n }}>{{ n }}</option>
           {% endfor %}
         </select>
       </label>
-      {% for birthdate in form.children %}
       <label class="field">
+        <span>Children</span>
+        <select name="children_count" data-children>
+          {% for n in range(0, max_party - form.adults|int + 1) %}
+          <option value="{{ n }}" {{ 'selected' if form.children_count|int == n }}>{{ n }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% for birthdate in form.children %}
+      <label class="field" data-child-field>
         <span>Child {{ loop.index }} birthdate</span>
         <input type="date" name="child" value="{{ birthdate }}">
       </label>
       {% endfor %}
     </div>
-    <p class="hint">Children under 3 on the arrival date travel free and are left out of the
-      price request. Leave a field empty if you have fewer children.</p>
+    <p class="hint">A room holds up to {{ max_party }} people, adults and children together.
+      Children under 3 on the arrival date travel free and are left out of the price
+      request, but they still count towards the room.</p>
   </fieldset>
 
   <fieldset>
-    <legend>Dates</legend>
+    <legend>Check-in window</legend>
     <div class="grid">
       <label class="field">
-        <span>First arrival</span>
+        <span>Earliest check-in</span>
         <input type="date" name="arrival_start" value="{{ form.arrival_start }}" required>
       </label>
       <label class="field">
-        <span>Last arrival</span>
+        <span>Latest check-in</span>
         <input type="date" name="arrival_end" value="{{ form.arrival_end }}" required>
       </label>
       <label class="field">
@@ -59,21 +68,33 @@
         <select name="los">
           {% for los in los_choices %}
           <option value="{{ los }}" {{ 'selected' if form.los == los }}>
-            {{ los.replace('_', ' ') }}
+            {{ los|los }}
           </option>
           {% endfor %}
         </select>
       </label>
     </div>
-    <p class="hint">At most 31 arrival dates per track.</p>
+    <p class="hint">We check the price for every check-in date in this range, up to 31
+      dates. These are check-in dates, not check-out dates: with a 2-night stay,
+      checking in on 10 March means checking out on 12 March. The cheapest date is
+      what the alerts watch.</p>
   </fieldset>
 
   <fieldset>
-    <legend>Hotels to alert on</legend>
-    <p class="hint">All 16 hotels are polled, whichever you tick. Ticking decides which ones
-      may send you a message.</p>
+    <legend>Alerts: which hotels matter?</legend>
+    <p class="hint">All 16 hotels are tracked and polled, whichever you tick. Ticking only
+      decides which hotels may send you a Telegram message. None are selected by
+      default.</p>
+    <div class="actions check-actions">
+      <button type="button" class="ghost" data-check-all="shortlist">Select all</button>
+      <button type="button" class="ghost" data-check-none="shortlist">Clear</button>
+    </div>
+    {% for kind, label in [('onsite', 'Disney hotels (on-site)'), ('partner', 'Partner hotels')] %}
+    {% set group = hotels|selectattr('kind', 'equalto', kind)|list %}
+    {% if group %}
+    <h3>{{ label }}</h3>
     <div class="checks">
-      {% for hotel in hotels %}
+      {% for hotel in group %}
       <label class="check">
         <input type="checkbox" name="shortlist" value="{{ hotel.code }}"
                {{ 'checked' if hotel.code in form.shortlist }}>
@@ -83,6 +104,8 @@
       </label>
       {% endfor %}
     </div>
+    {% endif %}
+    {% endfor %}
   </fieldset>
 
   <fieldset>

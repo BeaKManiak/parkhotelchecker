@@ -66,12 +66,33 @@ PARKS = 2
 VALID_LOS = ("1n_2j", "2n_3j", "3n_4j", "4n_5j")
 DEFAULT_LOS = "2n_3j"
 
+# Human labels for the only place users see a stay shape. The keys are storage
+# values; nobody should have to decode "3n_4j".
+LOS_LABELS: dict[str, str] = {
+    "1n_2j": "1 night · 2 park days",
+    "2n_3j": "2 nights · 3 park days",
+    "3n_4j": "3 nights · 4 park days",
+    "4n_5j": "4 nights · 5 park days",
+}
+
+
+def los_label(los: str) -> str:
+    return LOS_LABELS.get(los, los.replace("_", " "))
+
 
 def park_days(los: str) -> int:
     """'2n_3j' -> 3."""
     if los not in VALID_LOS:
         raise ValueError(f"unsupported los {los!r}; expected one of {VALID_LOS}")
     return int(los.split("_")[1].rstrip("j"))
+
+
+# --- Party -----------------------------------------------------------------
+
+# One room, adults and children together. Under-3s are free but still occupy
+# the room, so they count towards this cap even though they are left out of the
+# priced party.
+MAX_PARTY = 7
 
 
 # --- Horizon ---------------------------------------------------------------

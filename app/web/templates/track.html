@@ -13,7 +13,7 @@
     </h1>
     <p class="muted">
       {{ party.adults|party(party_children|length) }} ·
-      {{ track.los.replace('_', ' ') }} ·
+      {{ track.los|los }} ·
       {{ track.arrival_start|day }}{% if track.arrival_end != track.arrival_start %} → {{ track.arrival_end|day }}{% endif %}
     </p>
   </div>
@@ -44,14 +44,15 @@
   <summary>Edit arrival window</summary>
   <form method="post" action="/tracks/{{ track.id }}/window" class="form-row">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label class="field"><span>First arrival</span>
+    <label class="field"><span>Earliest check-in</span>
       <input type="date" name="arrival_start" value="{{ track.arrival_start }}" required></label>
-    <label class="field"><span>Last arrival</span>
+    <label class="field"><span>Latest check-in</span>
       <input type="date" name="arrival_end" value="{{ track.arrival_end }}" required></label>
     <button>Update window</button>
   </form>
-  <p class="hint">Trimming stops watching a date but never deletes its history; extending
-    resumes it. Party, nights and markets cannot change.</p>
+  <p class="hint">These are check-in dates, not check-out dates. Trimming stops watching
+    a date but never deletes its history; extending resumes it. Party, nights and markets
+    cannot change.</p>
 </details>
 {% endif %}
 

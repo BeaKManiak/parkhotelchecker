@@ -7,7 +7,7 @@
 
 <h1>{{ hotel.name }}</h1>
 <p class="muted">
-  {{ track.los.replace('_', ' ') }} · {{ market }} · prices in EUR, ticket priced separately
+  {{ track.los|los }} · {{ market }} · prices in EUR, ticket priced separately
 </p>
 
 {% set priced = series|selectattr('price')|list %}

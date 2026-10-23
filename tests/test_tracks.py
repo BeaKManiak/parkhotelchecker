@@ -185,6 +185,17 @@ def test_shortlist_can_be_toggled(conn: sqlite3.Connection) -> None:
     assert rows == {"DCHH": 1, "DSFH": 1}
 
 
+def test_a_party_cannot_exceed_one_room(conn: sqlite3.Connection) -> None:
+    start = start_date()
+    toddler = (start - timedelta(days=800)).isoformat()
+
+    with pytest.raises(ValueError, match="a room holds at most 7"):
+        tracks.create_track(
+            conn,
+            spec(start=start, adults=7, child_birthdates=(toddler,)),
+        )
+
+
 def test_children_under_three_are_left_out_of_the_price_request(
     conn: sqlite3.Connection,
 ) -> None:
