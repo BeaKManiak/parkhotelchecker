@@ -108,6 +108,7 @@ def build_plan(
                p.adults, p.child_birthdates, MIN(tm.cadence_hours) AS cadence_hours
         FROM track_series ts
         JOIN track t        ON t.id = ts.track_id AND t.status = 'active'
+                           AND t.archived_at IS NULL
         JOIN series s       ON s.id = ts.series_id
         JOIN party p        ON p.id = s.party_id
         JOIN track_market tm ON tm.track_id = t.id AND tm.market = s.market
@@ -145,7 +146,7 @@ def build_plan(
         """
         SELECT t.id, t.los, t.party_id, t.arrival_start, t.arrival_end, p.adults, p.child_birthdates
         FROM track t JOIN party p ON p.id = t.party_id
-        WHERE t.status = 'active'
+        WHERE t.status = 'active' AND t.archived_at IS NULL
         """
     ):
         children = len(json.loads(track["child_birthdates"]))

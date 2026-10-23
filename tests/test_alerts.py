@@ -216,6 +216,15 @@ def test_stopped_tracks_are_silent(conn: sqlite3.Connection) -> None:
     assert build_digest(conn, change(series_id), now=utcnow()) is None
 
 
+def test_archived_tracks_are_silent(conn: sqlite3.Connection) -> None:
+    track_id = make_track(conn)
+    series_id = series_ids(conn, track_id)[0]
+    history(conn, series_id, [Decimal("820.00"), Decimal("700.00")])
+    tracks.archive_track(conn, track_id)
+
+    assert build_digest(conn, change(series_id), now=utcnow()) is None
+
+
 def test_the_digest_is_capped_and_says_how_much_it_hid(conn: sqlite3.Connection) -> None:
     track_id = make_track(conn, days=14)
     for series_id in series_ids(conn, track_id):

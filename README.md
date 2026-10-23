@@ -28,17 +28,6 @@ Two people use it. That is the scale it is built for.
   response whose shape it does not recognise.
 - Keeps the whole history forever. There is no "clean up old data" button.
 
-## What it deliberately does not do
-
-- Rank hotels against each other. Each hotel has its own cheapest arrival.
-- Alert on non-euro markets. Canary markets are fetched daily and stored, but
-  their currencies are market multipliers, not FX, and comparing them without a
-  conversion is a lie. They are visible on the charts, silent in Telegram.
-- Convert past prices retroactively.
-- Pause a track. Stopping is terminal; to resume, duplicate the configuration
-  into a new track. History is never deleted.
-- Require a JavaScript framework, a build step, a CDN, or an external database.
-
 ---
 
 ## Quick start: Synology NAS (recommended)
@@ -388,7 +377,7 @@ A line appears when, for an **active** track, on the **Spanish** market, for a
 ```
 🎢 Disneyland Paris — 22 Oct, 18:04  ·  3 changes
 
-February half term · 2n/3j · 2a1c
+February half term · 2 nights · 3 park days · 2a1c
   ▼ 7 Feb   €690 → €640   (−€50, all-time low)
   ▲ 3 Feb   €612 → €648   (+€36)
 
@@ -420,17 +409,34 @@ it says so, and the dashboard header says "last successful check: N hours ago".
 ## The dashboard
 
 - **Tracks** — one row per track: party, window, nights, cheapest arrival now.
+  Archived tracks sit in a collapsed section below.
 - **Track** — per-hotel cheapest available arrival, all-time low, last seen, the
   alert toggle, and a strip of facts (markets, threshold, changes in the last
-  24 h). Window trim/extend, check-now and stop live here.
-- **Hotel** — step chart of price over time, one line per arrival date (the 12
-  cheapest, with history), plus a table with package, previous, all-time low,
-  tickets, implied hotel cost, and when it was last seen.
+  24 h). Window trim/extend, check-now, stop, archive and delete live here.
+- **Hotel** — price history opens **over time**: x is when the price was
+  checked, one stepped line per arrival date (the 12 cheapest, with history),
+  with a 7 day / 30 day / all selector. **By check-in date** is the alternative
+  view. Below it: package, previous, all-time low, tickets, implied hotel cost,
+  and when each arrival was last seen.
 - **Health** — per-source last success, consecutive failures, last error, recent
   failures and recent requests.
 
 Trimmed arrivals are hidden from the chart but their observations are untouched,
 so extending the window again restores the lines exactly as they were.
+
+### Archiving and deleting tracks
+
+**Archive** hides a track, stops its polling and alerts, and keeps every link
+and price. It can be restored; the track's own state (tracking or stopped) is
+unchanged. **Stop** is still terminal: a stopped track stays in the list until
+you archive or delete it.
+
+**Delete** removes the track row and its hotel, market and date links. It does
+not remove prices: a series is keyed by hotel, market, arrival date, stay length
+and party, independently of any track, and observations belong to the series.
+Ticket prices, parties and fetch history stay too. A future track for the same
+holiday reuses those series and picks up their history, including observations
+from before it was created.
 
 ---
 

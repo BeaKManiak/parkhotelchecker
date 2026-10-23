@@ -471,6 +471,82 @@ def test_toggling_the_shortlist(client) -> None:
     assert row["shortlisted"] == 0
 
 
+def test_archiving_hides_the_track_and_restoring_brings_it_back(client) -> None:
+    http, conn, _ = client
+    track_id = new_track(conn)
+    page = http.get(f"/tracks/{track_id}", auth=AUTH)
+    token = csrf_from(page.text)
+
+    response = http.post(
+        f"/tracks/{track_id}/archive",
+        auth=AUTH,
+        data={"csrf": token},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert conn.execute(
+        "SELECT archived_at FROM track WHERE id = ?", (track_id,)
+    ).fetchone()["archived_at"] is not None
+
+    index = http.get("/", auth=AUTH)
+    assert "Archived tracks (1)" in index.text
+    detail = http.get(f"/tracks/{track_id}", auth=AUTH)
+    assert "archived" in detail.text
+
+    http.post(
+        f"/tracks/{track_id}/unarchive",
+        auth=AUTH,
+        data={"csrf": token},
+        follow_redirects=False,
+    )
+    assert conn.execute(
+        "SELECT archived_at FROM track WHERE id = ?", (track_id,)
+    ).fetchone()["archived_at"] is None
+
+
+def test_an_archived_track_cannot_be_checked_or_stopped(client) -> None:
+    http, conn, _ = client
+    track_id = new_track(conn)
+    page = http.get(f"/tracks/{track_id}", auth=AUTH)
+    token = csrf_from(page.text)
+    http.post(
+        f"/tracks/{track_id}/archive",
+        auth=AUTH,
+        data={"csrf": token},
+        follow_redirects=False,
+    )
+
+    for action in ("check", "stop"):
+        response = http.post(
+            f"/tracks/{track_id}/{action}",
+            auth=AUTH,
+            data={"csrf": token},
+            follow_redirects=False,
+        )
+        assert response.status_code == 409
+
+
+def test_deleting_a_track_keeps_the_prices(client) -> None:
+    http, conn, _ = client
+    track_id = new_track(conn)
+    seed_prices(conn, track_id, [820.00, 780.00])
+    observations = conn.execute("SELECT COUNT(*) AS n FROM observation").fetchone()["n"]
+    page = http.get(f"/tracks/{track_id}", auth=AUTH)
+    token = csrf_from(page.text)
+
+    response = http.post(
+        f"/tracks/{track_id}/delete",
+        auth=AUTH,
+        data={"csrf": token},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert conn.execute("SELECT COUNT(*) AS n FROM track").fetchone()["n"] == 0
+    assert conn.execute("SELECT COUNT(*) AS n FROM series").fetchone()["n"] > 0
+    assert conn.execute("SELECT COUNT(*) AS n FROM observation").fetchone()["n"] == observations
+
+
 def test_stopping_is_terminal_and_visible(client) -> None:
     http, conn, _ = client
     track_id = new_track(conn)

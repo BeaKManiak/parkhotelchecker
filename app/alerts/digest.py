@@ -267,7 +267,7 @@ def _watching_tracks(
         JOIN track_series ts ON ts.track_id = t.id AND ts.series_id = ? AND ts.watched = 1
         JOIN track_hotel th
           ON th.track_id = t.id AND th.hotel_code = ? AND th.shortlisted = 1
-        WHERE t.status = 'active'
+        WHERE t.status = 'active' AND t.archived_at IS NULL
         ORDER BY t.id
         """,
         (series_id, hotel_code),

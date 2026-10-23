@@ -17,7 +17,7 @@ import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_V1: tuple[str, ...] = (
     """
@@ -168,6 +168,13 @@ SCHEMA_V3: tuple[str, ...] = (
     "CREATE INDEX ix_fetch_log_source_key ON fetch_log(source, key, requested_at)",
 )
 
+SCHEMA_V4: tuple[str, ...] = (
+    # Archiving is visibility, not status: a stopped track and a paused one are
+    # different things. Null means visible; a timestamp means hidden and never
+    # polled.
+    "ALTER TABLE track ADD COLUMN archived_at TEXT",
+)
+
 
 def connect(path: str | Path) -> sqlite3.Connection:
     """Open (and migrate) a database. `:memory:` is allowed for tests.
@@ -198,6 +205,9 @@ def migrate(conn: sqlite3.Connection) -> None:
             conn.execute(statement)
     if version < 3:
         for statement in SCHEMA_V3:
+            conn.execute(statement)
+    if version < 4:
+        for statement in SCHEMA_V4:
             conn.execute(statement)
     conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.commit()

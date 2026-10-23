@@ -58,6 +58,7 @@ def build_router(*, require_user) -> APIRouter:
             request,
             "tracks.html",
             tracks=queries.track_list(conn),
+            archived=queries.track_list(conn, archived=True),
             health_age=queries.age_of_last_success(conn),
         )
 
@@ -221,7 +222,9 @@ def build_router(*, require_user) -> APIRouter:
         csrf: str = Form(""),
     ) -> RedirectResponse:
         check_csrf(request, csrf)
-        require_track(request, track_id)
+        row = require_track(request, track_id)
+        if row["archived_at"] is not None:
+            raise HTTPException(status_code=409, detail="track is archived")
         if hotel_code not in hotel_catalog.BY_CODE:
             raise HTTPException(status_code=400, detail="unknown hotel")
         tracks.set_shortlist(
@@ -238,10 +241,43 @@ def build_router(*, require_user) -> APIRouter:
         request: Request, track_id: int, csrf: str = Form("")
     ) -> RedirectResponse:
         check_csrf(request, csrf)
-        require_track(request, track_id)
+        row = require_track(request, track_id)
+        if row["archived_at"] is not None:
+            raise HTTPException(status_code=409, detail="track is archived")
         tracks.stop_track(request.app.state.conn, track_id)
         return RedirectResponse(
             url=f"/tracks/{track_id}?msg=Track+stopped.+History+is+kept.", status_code=303
+        )
+
+    @router.post("/tracks/{track_id}/archive")
+    async def archive(
+        request: Request, track_id: int, csrf: str = Form("")
+    ) -> RedirectResponse:
+        check_csrf(request, csrf)
+        require_track(request, track_id)
+        tracks.archive_track(request.app.state.conn, track_id, archived=True)
+        return RedirectResponse(url="/?msg=Track+archived.+History+is+kept.", status_code=303)
+
+    @router.post("/tracks/{track_id}/unarchive")
+    async def unarchive(
+        request: Request, track_id: int, csrf: str = Form("")
+    ) -> RedirectResponse:
+        check_csrf(request, csrf)
+        require_track(request, track_id)
+        tracks.archive_track(request.app.state.conn, track_id, archived=False)
+        return RedirectResponse(
+            url=f"/tracks/{track_id}?msg=Track+restored.", status_code=303
+        )
+
+    @router.post("/tracks/{track_id}/delete")
+    async def delete(
+        request: Request, track_id: int, csrf: str = Form("")
+    ) -> RedirectResponse:
+        check_csrf(request, csrf)
+        require_track(request, track_id)
+        tracks.delete_track(request.app.state.conn, track_id)
+        return RedirectResponse(
+            url="/?msg=Track+deleted.+Price+history+is+kept.", status_code=303
         )
 
     @router.post("/tracks/{track_id}/check")
@@ -249,7 +285,9 @@ def build_router(*, require_user) -> APIRouter:
         request: Request, track_id: int, csrf: str = Form("")
     ) -> RedirectResponse:
         check_csrf(request, csrf)
-        require_track(request, track_id)
+        row = require_track(request, track_id)
+        if row["archived_at"] is not None:
+            raise HTTPException(status_code=409, detail="track is archived")
         request.app.state.check_now()
         return RedirectResponse(
             url=f"/tracks/{track_id}?msg=Check+started.+Refresh+in+a+minute.", status_code=303

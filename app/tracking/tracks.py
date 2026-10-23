@@ -213,6 +213,8 @@ def set_arrival_window(
     track = conn.execute("SELECT * FROM track WHERE id = ?", (track_id,)).fetchone()
     if track is None:
         raise ValueError(f"unknown track {track_id}")
+    if track["archived_at"] is not None:
+        raise ValueError("cannot edit an archived track")
     if track["status"] != "active":
         raise ValueError("cannot edit a stopped track")
 
@@ -286,15 +288,51 @@ def stop_track(
 ) -> None:
     """Terminal. History stays; polling and alerts stop."""
     now = now or store.utcnow()
-    row = conn.execute("SELECT status FROM track WHERE id = ?", (track_id,)).fetchone()
+    row = conn.execute(
+        "SELECT status, archived_at FROM track WHERE id = ?", (track_id,)
+    ).fetchone()
     if row is None:
         raise ValueError(f"unknown track {track_id}")
+    if row["archived_at"] is not None:
+        raise ValueError("cannot stop an archived track")
     if row["status"] == "stopped":
         return
     conn.execute(
         "UPDATE track SET status = 'stopped', stopped_at = ? WHERE id = ?",
         (store.iso_utc(now), track_id),
     )
+    conn.commit()
+
+
+def archive_track(
+    conn: sqlite3.Connection,
+    track_id: int,
+    *,
+    archived: bool = True,
+    now: datetime | None = None,
+) -> None:
+    """Hide a track and pause polling, without touching its status or history."""
+    row = conn.execute(
+        "SELECT archived_at FROM track WHERE id = ?", (track_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"unknown track {track_id}")
+    if archived == (row["archived_at"] is not None):
+        return
+    value = store.iso_utc(now or store.utcnow()) if archived else None
+    conn.execute("UPDATE track SET archived_at = ? WHERE id = ?", (value, track_id))
+    conn.commit()
+
+
+def delete_track(conn: sqlite3.Connection, track_id: int) -> None:
+    """Remove the track and its links. Prices and their series stay."""
+    row = conn.execute("SELECT id FROM track WHERE id = ?", (track_id,)).fetchone()
+    if row is None:
+        raise ValueError(f"unknown track {track_id}")
+    conn.execute("DELETE FROM track_series WHERE track_id = ?", (track_id,))
+    conn.execute("DELETE FROM track_hotel WHERE track_id = ?", (track_id,))
+    conn.execute("DELETE FROM track_market WHERE track_id = ?", (track_id,))
+    conn.execute("DELETE FROM track WHERE id = ?", (track_id,))
     conn.commit()
 
 

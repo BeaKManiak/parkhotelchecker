@@ -7,13 +7,15 @@
   <a class="button" href="/tracks/new">New track</a>
 </div>
 
-{% if not tracks %}
+{% if not tracks and not archived %}
   <div class="empty">
     <p>No tracks yet.</p>
     <p class="muted">A track is one holiday shape: a party, an arrival window, a length of stay.
       Create one and the first poll fills in the prices.</p>
     <p><a class="button" href="/tracks/new">Create the first track</a></p>
   </div>
+{% elif not tracks %}
+  <p class="muted">No active tracks. Archived tracks are below.</p>
 {% else %}
   <div class="table-wrap">
     <table>
@@ -52,5 +54,37 @@
       </tbody>
     </table>
   </div>
+{% endif %}
+
+{% if archived %}
+<details class="panel">
+  <summary>Archived tracks ({{ archived|length }})</summary>
+  <p class="muted small">Archived tracks are not polled and send no alerts. Their price
+    history is kept; deleting one keeps the history too.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Track</th>
+          <th>Party</th>
+          <th>Archived</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in archived %}
+        <tr class="dim">
+          <td><a href="/tracks/{{ t.id }}">{{ t.name }}</a>
+            <div class="muted small">{{ t.series_watched }} dates watched</div>
+          </td>
+          <td>{{ t.adults|party(t.child_birthdates|length) }}</td>
+          <td>{{ t.archived_at|local }}</td>
+          <td><a href="/tracks/{{ t.id }}">Open</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
 {% endif %}
 {% endblock %}

@@ -5,7 +5,9 @@
 <div class="page-head">
   <div>
     <h1>{{ track.name }}
-      {% if track.status == 'active' %}
+      {% if track.archived_at %}
+        <span class="badge">archived</span>
+      {% elif track.status == 'active' %}
         <span class="badge on">tracking</span>
       {% else %}
         <span class="badge">stopped</span>
@@ -18,7 +20,7 @@
     </p>
   </div>
   <div class="actions">
-    {% if track.status == 'active' %}
+    {% if track.status == 'active' and not track.archived_at %}
     <form method="post" action="/tracks/{{ track.id }}/check" class="inline">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="ghost">Check now</button>
@@ -37,9 +39,12 @@
   {% if track.stopped_at %}
   <div><span class="k">Stopped</span><span class="v">{{ track.stopped_at|local }}</span></div>
   {% endif %}
+  {% if track.archived_at %}
+  <div><span class="k">Archived</span><span class="v">{{ track.archived_at|local }}</span></div>
+  {% endif %}
 </div>
 
-{% if track.status == 'active' %}
+{% if track.status == 'active' and not track.archived_at %}
 <details class="panel">
   <summary>Edit arrival window</summary>
   <form method="post" action="/tracks/{{ track.id }}/window" class="form-row">
@@ -101,7 +106,7 @@
           <td class="num">{{ h.all_time_low|money }}</td>
           <td>{{ h.last_seen|ago }}</td>
           <td>
-            {% if track.status == 'active' %}
+            {% if track.status == 'active' and not track.archived_at %}
             <form method="post" action="/tracks/{{ track.id }}/shortlist" class="inline">
               <input type="hidden" name="csrf" value="{{ csrf }}">
               <input type="hidden" name="hotel_code" value="{{ h.code }}">
@@ -122,7 +127,7 @@
   {% endif %}
 {% endfor %}
 
-{% if track.status == 'active' %}
+{% if track.status == 'active' and not track.archived_at %}
 <details class="panel danger">
   <summary>Stop this track</summary>
   <p>Stopping is permanent. Prices stop being checked and alerts stop. Every price already
@@ -133,6 +138,39 @@
   </form>
 </details>
 {% endif %}
+
+{% if track.archived_at %}
+<details class="panel">
+  <summary>Archived track</summary>
+  <p>This track is archived: it is not polled and sends no alerts. Its price history is
+    kept. Restoring it brings back whatever state it had before.</p>
+  <form method="post" action="/tracks/{{ track.id }}/unarchive">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ghost">Restore track</button>
+  </form>
+</details>
+{% else %}
+<details class="panel">
+  <summary>Archive this track</summary>
+  <p>Archiving moves the track off the dashboard and stops polling and alerts. Nothing is
+    deleted, and you can restore it later.</p>
+  <form method="post" action="/tracks/{{ track.id }}/archive">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ghost">Archive track</button>
+  </form>
+</details>
+{% endif %}
+
+<details class="panel danger">
+  <summary>Delete this track</summary>
+  <p>Deleting removes the track and its hotel, market and date links. Price observations,
+    ticket prices and history stay in the database, so a future track for the same
+    holiday reuses them. This cannot be undone.</p>
+  <form method="post" action="/tracks/{{ track.id }}/delete">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="danger">Delete permanently</button>
+  </form>
+</details>
 
 <p><a href="/">← All tracks</a></p>
 {% endblock %}

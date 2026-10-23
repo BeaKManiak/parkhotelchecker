@@ -68,6 +68,7 @@ class TrackRow:
     arrival_end: date
     created_at: datetime | None
     stopped_at: datetime | None
+    archived_at: datetime | None
     adults: int
     child_birthdates: tuple[str, ...]
     min_delta: Decimal
@@ -285,9 +286,13 @@ def _ticket_prices(
     }
 
 
-def track_list(conn: sqlite3.Connection) -> list[TrackRow]:
+def track_list(
+    conn: sqlite3.Connection, *, archived: bool = False
+) -> list[TrackRow]:
+    visibility = "IS NOT NULL" if archived else "IS NULL"
+    ordering = "t.archived_at DESC" if archived else "t.status = 'stopped', t.id DESC"
     rows = conn.execute(
-        """
+        f"""
         SELECT t.*, p.adults, p.child_birthdates,
                (SELECT COUNT(*) FROM track_series ts
                  WHERE ts.track_id = t.id AND ts.watched = 1) AS series_watched,
@@ -297,7 +302,8 @@ def track_list(conn: sqlite3.Connection) -> list[TrackRow]:
                  JOIN track_series ts2 ON ts2.series_id = o.series_id
                  WHERE ts2.track_id = t.id AND ts2.watched = 1) AS last_observation
         FROM track t JOIN party p ON p.id = t.party_id
-        ORDER BY t.status = 'stopped', t.id DESC
+        WHERE t.archived_at {visibility}
+        ORDER BY {ordering}
         """
     ).fetchall()
 
@@ -318,6 +324,7 @@ def track_list(conn: sqlite3.Connection) -> list[TrackRow]:
                 arrival_end=date.fromisoformat(row["arrival_end"]),
                 created_at=_dt(row["created_at"]),
                 stopped_at=_dt(row["stopped_at"]),
+                archived_at=_dt(row["archived_at"]),
                 adults=int(row["adults"]),
                 child_birthdates=tuple(json.loads(row["child_birthdates"])),
                 min_delta=from_cents(int(row["min_delta_cents"])) or Decimal("0"),

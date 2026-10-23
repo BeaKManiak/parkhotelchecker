@@ -185,6 +185,44 @@ def test_shortlist_can_be_toggled(conn: sqlite3.Connection) -> None:
     assert rows == {"DCHH": 1, "DSFH": 1}
 
 
+def test_archiving_keeps_the_track_and_its_status(conn: sqlite3.Connection) -> None:
+    track_id = tracks.create_track(conn, spec())
+
+    tracks.archive_track(conn, track_id)
+    row = conn.execute("SELECT status, archived_at FROM track WHERE id = ?", (track_id,)).fetchone()
+    assert row["status"] == "active"
+    assert row["archived_at"] is not None
+
+    tracks.archive_track(conn, track_id, archived=False)
+    row = conn.execute("SELECT archived_at FROM track WHERE id = ?", (track_id,)).fetchone()
+    assert row["archived_at"] is None
+
+
+def test_deleting_a_track_keeps_the_price_history(conn: sqlite3.Connection) -> None:
+    track_id = tracks.create_track(conn, spec())
+    series_id = conn.execute(
+        "SELECT series_id FROM track_series WHERE track_id = ? LIMIT 1", (track_id,)
+    ).fetchone()["series_id"]
+    conn.execute(
+        """INSERT INTO observation (series_id, price_cents, available, observed_at, kind)
+           VALUES (?, 60000, 1, '2026-10-23T10:00:00+00:00', 'first')""",
+        (series_id,),
+    )
+    conn.commit()
+
+    tracks.delete_track(conn, track_id)
+
+    for table in ("track", "track_hotel", "track_market", "track_series"):
+        count = conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]
+        assert count == 0, f"{table} should be empty"
+    assert conn.execute("SELECT COUNT(*) AS n FROM series").fetchone()["n"] > 0
+    assert conn.execute("SELECT COUNT(*) AS n FROM observation").fetchone()["n"] == 1
+
+    # The same holiday can be recreated and reuses the existing series.
+    tracks.create_track(conn, spec())
+    assert conn.execute("SELECT COUNT(*) AS n FROM series").fetchone()["n"] == 14
+
+
 def test_a_party_cannot_exceed_one_room(conn: sqlite3.Connection) -> None:
     start = start_date()
     toddler = (start - timedelta(days=800)).isoformat()
