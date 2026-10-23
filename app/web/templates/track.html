@@ -47,12 +47,14 @@
 {% if track.status == 'active' and not track.archived_at %}
 <details class="panel">
   <summary>Edit arrival window</summary>
-  <form method="post" action="/tracks/{{ track.id }}/window" class="form-row">
+  <form method="post" action="/tracks/{{ track.id }}/window" class="form-row"
+        data-date-window>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label class="field"><span>Earliest check-in</span>
       <input type="date" name="arrival_start" value="{{ track.arrival_start }}" required></label>
     <label class="field"><span>Latest check-in</span>
-      <input type="date" name="arrival_end" value="{{ track.arrival_end }}" required></label>
+      <input type="date" name="arrival_end" value="{{ track.arrival_end }}"
+             min="{{ track.arrival_start }}" required></label>
     <button>Update window</button>
   </form>
   <p class="hint">These are check-in dates, not check-out dates. Trimming stops watching

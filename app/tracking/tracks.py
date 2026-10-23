@@ -35,7 +35,7 @@ class TrackSpec:
 
 def arrival_dates(start: date, end: date) -> list[date]:
     if end < start:
-        raise ValueError("arrival window ends before it starts")
+        raise ValueError("latest check-in must be on or after the earliest check-in")
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
 
 

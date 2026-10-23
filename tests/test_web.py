@@ -183,6 +183,38 @@ def test_the_new_track_form_explains_the_party_and_check_in_window(client) -> No
     # The shortlist starts empty; all hotels are tracked regardless.
     assert re.search(r'name="shortlist"[^>]*checked', text) is None
 
+    start = date.today() + timedelta(days=1)
+    assert re.search(
+        r'name="arrival_end"[^>]*min="' + re.escape(start.isoformat()) + '"', text
+    )
+
+
+def test_the_latest_check_in_cannot_be_before_the_earliest(client) -> None:
+    http, conn, _ = client
+    page = http.get("/tracks/new", auth=AUTH)
+    token = csrf_from(page.text)
+    start = date.today() + timedelta(days=40)
+
+    response = http.post(
+        "/tracks",
+        auth=AUTH,
+        data={
+            "csrf": token,
+            "name": "Backwards",
+            "adults": "2",
+            "children_count": "0",
+            "los": "2n_3j",
+            "arrival_start": (start + timedelta(days=2)).isoformat(),
+            "arrival_end": start.isoformat(),
+            "min_delta": "20",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert "latest check-in must be on or after the earliest check-in" in response.text
+    assert conn.execute("SELECT COUNT(*) AS n FROM track").fetchone()["n"] == 0
+
 
 def test_children_count_must_match_the_birthdates(client) -> None:
     http, _, _ = client
@@ -400,7 +432,7 @@ def test_hotel_page_carries_the_chart_data(client) -> None:
     match = re.search(r"data-chart='([^']+)'", response.text)
     assert match, "chart canvas has no data"
     chart = json.loads(match.group(1))
-    assert chart["default"] == "time"
+    assert chart["default"] == "snapshot"
     assert len(chart["time"][0]["points"]) == 3
     assert chart["time"][0]["points"][-1][1] == 799.0
     assert chart["snapshot"], "the check-in view should have prices too"
@@ -409,7 +441,7 @@ def test_hotel_page_carries_the_chart_data(client) -> None:
     assert http.get(f"/tracks/{track_id}/hotels/DDLH", auth=AUTH).status_code == 404
 
 
-def test_the_time_view_is_the_default_and_has_a_range_selector(client) -> None:
+def test_the_check_in_view_is_the_default_and_has_a_range_selector(client) -> None:
     http, conn, _ = client
     track_id = new_track(conn)
     seed_prices(conn, track_id, [820.00])
@@ -419,12 +451,57 @@ def test_the_time_view_is_the_default_and_has_a_range_selector(client) -> None:
     match = re.search(r"data-chart='([^']+)'", response.text)
     chart = json.loads(match.group(1))
     assert chart["checks"] == 1
-    assert chart["default"] == "time"
+    assert chart["default"] == "snapshot"
     assert "By check-in date" in response.text
     assert "Over time" in response.text
+    assert "Window" in response.text
     assert 'data-chart-range="7"' in response.text
     assert 'data-chart-range="30"' in response.text
     assert 'data-chart-range="all"' in response.text
+
+
+def test_the_hotel_page_shows_the_cheapest_dates_and_ranks(client) -> None:
+    http, conn, _ = client
+    track_id = new_track(conn)
+    arrivals = [
+        row["arrival_date"]
+        for row in conn.execute(
+            """
+            SELECT s.arrival_date FROM series s
+            JOIN track_series ts ON ts.series_id = s.id AND ts.track_id = ?
+            WHERE s.hotel_code = 'DCHH' ORDER BY s.arrival_date
+            """,
+            (track_id,),
+        ).fetchall()
+    ]
+    # 799 (third cheapest), 760 (cheapest), 790 (second cheapest)
+    for arrival, price in zip(arrivals, [799.00, 760.00, 790.00]):
+        conn.execute(
+            """
+            INSERT INTO observation (series_id, price_cents, available, observed_at, kind)
+            SELECT s.id, ?, 1, ?, 'first' FROM series s
+            WHERE s.hotel_code = 'DCHH' AND s.arrival_date = ?
+            """,
+            (
+                int(price * 100),
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                arrival,
+            ),
+        )
+    conn.commit()
+
+    response = http.get(f"/tracks/{track_id}/hotels/DCHH", auth=AUTH)
+    text = response.text
+
+    cheapest_day = date.fromisoformat(arrivals[1]).strftime("%a %d %b %Y")
+    second_day = date.fromisoformat(arrivals[2]).strftime("%a %d %b %Y")
+    third_day = date.fromisoformat(arrivals[0]).strftime("%a %d %b %Y")
+
+    assert "€760.00" in text
+    assert cheapest_day in text
+    assert re.search(re.escape(cheapest_day) + r'\s*<span class="badge rank low">#1', text)
+    assert re.search(re.escape(second_day) + r'\s*<span class="badge rank">#2', text)
+    assert re.search(re.escape(third_day) + r'\s*<span class="badge rank">#3', text)
 
 
 def test_trimming_the_window_keeps_the_track_and_changes_it(client) -> None:

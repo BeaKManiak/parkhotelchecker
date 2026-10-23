@@ -148,8 +148,10 @@
             borderColor: colour,
             backgroundColor: colour,
             borderWidth: 2,
-            pointRadius: kept.length < 3 ? 3 : 0,
-            pointHoverRadius: 4,
+            hoverBorderWidth: 3,
+            pointRadius: 2.5,
+            pointHoverRadius: 5,
+            pointHitRadius: 10,
             stepped: true,
             tension: 0,
             spanGaps: true
@@ -177,7 +179,7 @@
         maintainAspectRatio: false,
         interaction: snapshot
           ? { mode: "nearest", axis: "x", intersect: false }
-          : { mode: "x", axis: "x", intersect: false },
+          : { mode: "nearest", axis: "xy", intersect: false },
         scales: {
           x: {
             type: "linear",
@@ -269,12 +271,13 @@
       if (data.checks < 2) {
         hint.textContent =
           windowText +
-          " Only one check so far, so the lines are dots; more checks draw the trend.";
+          " One dot per recorded check; hover a line to see its arrival. " +
+          "More checks will draw the trend.";
       } else {
         hint.textContent =
           windowText +
-          " One stepped line per check-in date; x is when we checked. " +
-          "Lines at the same price overlap exactly.";
+          " One dot per recorded check; hover a line to see its arrival. " +
+          "Click a legend entry to hide that line.";
       }
     }
 
@@ -387,6 +390,25 @@
     rebuildChoices();
   }
 
+  function setupDateWindows() {
+    document.querySelectorAll("[data-date-window]").forEach(function (form) {
+      var start = form.querySelector('input[name="arrival_start"]');
+      var end = form.querySelector('input[name="arrival_end"]');
+      if (!start || !end) return;
+
+      function sync() {
+        if (!start.value) return;
+        end.min = start.value;
+        if (end.value && end.value < start.value) {
+          end.value = start.value;
+        }
+      }
+
+      start.addEventListener("change", sync);
+      sync();
+    });
+  }
+
   function setupCheckAll() {
     function boxes(name) {
       return Array.prototype.slice.call(
@@ -413,6 +435,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     setupParty();
+    setupDateWindows();
     setupCheckAll();
     setupChart();
   });

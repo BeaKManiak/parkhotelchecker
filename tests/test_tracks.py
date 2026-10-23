@@ -98,9 +98,11 @@ def test_unknown_market_is_rejected(conn: sqlite3.Connection) -> None:
         tracks.create_track(conn, spec(markets=(("xx-xx", 6),)))
 
 
-def test_window_ends_before_it_starts_is_rejected(conn: sqlite3.Connection) -> None:
+def test_latest_check_in_before_the_earliest_is_rejected(
+    conn: sqlite3.Connection,
+) -> None:
     start = start_date()
-    with pytest.raises(ValueError, match="before it starts"):
+    with pytest.raises(ValueError, match="latest check-in must be on or after"):
         tracks.create_track(conn, spec(start=start, end=start - timedelta(days=1)))
 
 

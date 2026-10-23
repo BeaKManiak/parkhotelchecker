@@ -10,13 +10,15 @@
   {{ track.los|los }} · {{ market }} · prices in EUR, ticket priced separately
 </p>
 
-{% set priced = series|selectattr('price')|list %}
-{% set cheapest = priced|map(attribute='price')|min if priced else None %}
-{% set low = series|map(attribute='all_time_low')|select('ne', none)|min if series else None %}
-
 <div class="facts">
-  <div><span class="k">Cheapest now</span><span class="v">{{ cheapest|money }}</span></div>
-  <div><span class="k">All-time low</span><span class="v">{{ low|money }}</span></div>
+  <div><span class="k">Cheapest now</span>
+    <span class="v">{% if cheapest_row %}{{ cheapest_row.price|money(cheapest_row.currency) }}{% else %}—{% endif %}</span>
+    {% if cheapest_row %}<span class="muted small">{{ cheapest_row.arrival|day }}</span>{% endif %}
+  </div>
+  <div><span class="k">All-time low</span>
+    <span class="v">{% if low_row %}{{ low_row.all_time_low|money(low_row.currency) }}{% else %}—{% endif %}</span>
+    {% if low_row %}<span class="muted small">{{ low_row.arrival|day }}</span>{% endif %}
+  </div>
   <div><span class="k">Dates tracked</span><span class="v">{{ series|length }}</span></div>
   <div><span class="k">Last check</span><span class="v">{{ last_success|ago }}</span></div>
 </div>
@@ -29,6 +31,7 @@
     <button type="button" class="ghost" data-chart-mode="time">Over time</button>
     <span class="chart-range" data-chart-range-group role="group"
           aria-label="Time range">
+      <span class="chart-range-label">Window</span>
       <button type="button" class="ghost" data-chart-range="7">7 days</button>
       <button type="button" class="ghost" data-chart-range="30">30 days</button>
       <button type="button" class="ghost" data-chart-range="all">All</button>
@@ -67,7 +70,10 @@
       <tbody>
         {% for row in series %}
         <tr>
-          <td class="nowrap">{{ row.arrival|day }}</td>
+          <td class="nowrap">{{ row.arrival|day }}
+            {% set rank = ranks.get(row.series_id) %}
+            {% if rank %}<span class="badge rank{{ ' low' if rank == 1 else '' }}">#{{ rank }}</span>{% endif %}
+          </td>
           <td class="num">
             {% if row.price is not none %}
               <strong>{{ row.price|money(row.currency) }}</strong>

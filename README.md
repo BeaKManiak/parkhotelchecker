@@ -413,11 +413,12 @@ it says so, and the dashboard header says "last successful check: N hours ago".
 - **Track** — per-hotel cheapest available arrival, all-time low, last seen, the
   alert toggle, and a strip of facts (markets, threshold, changes in the last
   24 h). Window trim/extend, check-now, stop, archive and delete live here.
-- **Hotel** — price history opens **over time**: x is when the price was
-  checked, one stepped line per arrival date (the 12 cheapest, with history),
-  with a 7 day / 30 day / all selector. **By check-in date** is the alternative
-  view. Below it: package, previous, all-time low, tickets, implied hotel cost,
-  and when each arrival was last seen.
+- **Hotel** — price history opens **by check-in date**, with the cheapest
+  current date in the summary and #1/#2/#3 badges on the three cheapest
+  arrivals. **Over time** is the alternative: x is when the price was checked,
+  one stepped line per arrival date (the 12 cheapest, with history), with a
+  7 day / 30 day / all selector. Below it: package, previous, all-time low,
+  tickets, implied hotel cost, and when each arrival was last seen.
 - **Health** — per-source last success, consecutive failures, last error, recent
   failures and recent requests.
 

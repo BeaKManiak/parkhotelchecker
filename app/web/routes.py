@@ -311,6 +311,14 @@ def build_router(*, require_user) -> APIRouter:
         market = queries.primary_market(conn, track_id)
         rows = queries.series(conn, track_id, hotel_code, market)
         chart = _chart_payload(rows)
+
+        priced = [r for r in rows if r.price is not None and r.available]
+        ranked = sorted(priced, key=lambda r: (r.price, r.arrival))
+        ranks = {r.series_id: i for i, r in enumerate(ranked[:3], start=1)}
+        cheapest_row = ranked[0] if ranked else None
+        lows = [r for r in rows if r.all_time_low is not None]
+        low_row = min(lows, key=lambda r: (r.all_time_low, r.arrival)) if lows else None
+
         return render(
             request,
             "hotel.html",
@@ -319,6 +327,9 @@ def build_router(*, require_user) -> APIRouter:
             series=rows,
             chart=chart,
             market=market,
+            ranks=ranks,
+            cheapest_row=cheapest_row,
+            low_row=low_row,
         )
 
     # --- health -----------------------------------------------------------
@@ -366,8 +377,8 @@ def _chart_payload(rows: list[queries.SeriesRow], limit: int = 12) -> dict:
     - ``snapshot``: every currently priced arrival, x = check-in date. This is
       the only honest view on the first day, when there is no trend yet.
 
-    The time view is the default whenever there is history; the snapshot is
-    the fallback for a hotel whose prices have never been recorded.
+    The check-in snapshot is the default: it answers "which date is cheapest"
+    immediately. The time view is the alternative once there is history.
     """
 
     def short(day: date) -> str:
@@ -403,7 +414,7 @@ def _chart_payload(rows: list[queries.SeriesRow], limit: int = 12) -> dict:
     return {
         "time": time_series,
         "snapshot": snapshot,
-        "default": "time" if time_series else "snapshot",
+        "default": "snapshot" if snapshot else "time",
         "checks": len(checks),
         "skipped": len(with_history) - len(chosen),
         "as_of": as_of.isoformat() if as_of else None,
