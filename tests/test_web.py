@@ -380,15 +380,32 @@ def test_hotel_page_carries_the_chart_data(client) -> None:
     response = http.get(f"/tracks/{track_id}/hotels/DCHH", auth=AUTH)
 
     assert response.status_code == 200
-    match = re.search(r"data-series='([^']+)'", response.text)
+    match = re.search(r"data-chart='([^']+)'", response.text)
     assert match, "chart canvas has no data"
-    series = json.loads(match.group(1))
-    assert series, "chart has no datasets"
-    assert len(series[0]["points"]) == 3
-    assert series[0]["points"][-1][1] == 799.0
+    chart = json.loads(match.group(1))
+    assert chart["default"] == "time"
+    assert len(chart["time"][0]["points"]) == 3
+    assert chart["time"][0]["points"][-1][1] == 799.0
+    assert chart["snapshot"], "the check-in view should have prices too"
 
     # a hotel that is not part of this track must not be reachable
     assert http.get(f"/tracks/{track_id}/hotels/DDLH", auth=AUTH).status_code == 404
+
+
+def test_one_check_opens_the_check_in_view(client) -> None:
+    http, conn, _ = client
+    track_id = new_track(conn)
+    seed_prices(conn, track_id, [820.00])
+
+    response = http.get(f"/tracks/{track_id}/hotels/DCHH", auth=AUTH)
+
+    match = re.search(r"data-chart='([^']+)'", response.text)
+    chart = json.loads(match.group(1))
+    assert chart["checks"] == 1
+    assert chart["default"] == "snapshot"
+    assert chart["snapshot"]
+    assert "By check-in date" in response.text
+    assert "Over time" in response.text
 
 
 def test_trimming_the_window_keeps_the_track_and_changes_it(client) -> None:

@@ -180,6 +180,8 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
 .facts .k { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .facts .v { display: block; font-size: 16px; font-weight: 550; margin-top: 2px; }
 
+.chart-controls { display: flex; gap: 8px; margin: 2px 0 12px; flex-wrap: wrap; }
+.chart-controls button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .chart-wrap { position: relative; height: 340px; }
 canvas { width: 100% !important; }
 

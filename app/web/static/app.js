@@ -13,14 +13,14 @@
     "#2980b9", "#b9770e"
   ];
 
-  function parseData(canvas) {
-    var raw = canvas.getAttribute("data-series");
-    if (!raw) return [];
+  function parseChart(canvas) {
+    var raw = canvas.getAttribute("data-chart");
+    if (!raw) return null;
     try {
       return JSON.parse(raw);
     } catch (err) {
       console.error("could not parse chart data", err);
-      return [];
+      return null;
     }
   }
 
@@ -31,50 +31,134 @@
     });
   }
 
-  function draw(canvas) {
-    var series = parseData(canvas);
-    if (!series.length || typeof window.Chart === "undefined") return;
+  // Arrival dates are calendar days, not instants: build the timestamp in the
+  // browser's timezone so "13 Feb" stays 13 Feb wherever it is read.
+  function localDateMs(iso) {
+    var parts = iso.split("-").map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+  }
 
-    var datasets = series.map(function (item, index) {
-      var colour = PALETTE[index % PALETTE.length];
-      return {
-        label: item.label,
-        data: item.points.map(function (point) {
+  function tickCallback(mode, min, max) {
+    var span = max - min;
+    var sameYear =
+      new Date(min).getFullYear() === new Date(max).getFullYear();
+    return function (value) {
+      var moment = new Date(value);
+      if (mode === "snapshot") {
+        return moment.toLocaleDateString(
+          undefined,
+          sameYear
+            ? { day: "2-digit", month: "short" }
+            : { day: "2-digit", month: "short", year: "numeric" }
+        );
+      }
+      if (span <= 2 * 86400000) {
+        return moment.toLocaleString(undefined, {
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
+      if (!sameYear || span > 365 * 86400000) {
+        return moment.toLocaleDateString(undefined, {
+          month: "short",
+          year: "numeric"
+        });
+      }
+      return moment.toLocaleDateString(undefined, {
+        day: "2-digit",
+        month: "short"
+      });
+    };
+  }
+
+  function draw(canvas, data, mode) {
+    if (typeof window.Chart === "undefined") return null;
+
+    var snapshot = mode === "snapshot";
+    var datasets = [];
+    var xs = [];
+
+    if (snapshot) {
+      var points = data.snapshot.map(function (point) {
+        return { x: localDateMs(point.date), y: point.price };
+      });
+      xs = points.map(function (point) {
+        return point.x;
+      });
+      datasets = [
+        {
+          label: "Current price",
+          data: points,
+          borderColor: PALETTE[0],
+          backgroundColor: PALETTE[0],
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          stepped: false,
+          tension: 0,
+          spanGaps: false
+        }
+      ];
+    } else {
+      datasets = data.time.map(function (item, index) {
+        var colour = PALETTE[index % PALETTE.length];
+        var points = item.points.map(function (point) {
           return { x: point[0], y: point[1] };
-        }),
-        borderColor: colour,
-        backgroundColor: colour,
-        borderWidth: 2,
-        pointRadius: item.points.length < 3 ? 3 : 0,
-        pointHoverRadius: 4,
-        stepped: true,
-        tension: 0,
-        spanGaps: true
-      };
+        });
+        xs = xs.concat(
+          points.map(function (point) {
+            return point.x;
+          })
+        );
+        return {
+          label: item.label,
+          data: points,
+          borderColor: colour,
+          backgroundColor: colour,
+          borderWidth: 2,
+          pointRadius: item.points.length < 3 ? 3 : 0,
+          pointHoverRadius: 4,
+          stepped: true,
+          tension: 0,
+          spanGaps: true
+        };
+      });
+    }
+
+    if (!xs.length) return null;
+    var min = Infinity;
+    var max = -Infinity;
+    xs.forEach(function (x) {
+      if (x < min) min = x;
+      if (x > max) max = x;
     });
 
-    new window.Chart(canvas, {
+    return new window.Chart(canvas, {
       type: "line",
       data: { datasets: datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: { mode: "nearest", axis: "x", intersect: false },
+        interaction: snapshot
+          ? { mode: "nearest", axis: "x", intersect: false }
+          : { mode: "index", axis: "x", intersect: false },
         scales: {
           x: {
             type: "linear",
+            title: {
+              display: true,
+              text: snapshot ? "Check-in date" : "Price checked on"
+            },
             ticks: {
               maxTicksLimit: 8,
-              callback: function (value) {
-                return new Date(value).toLocaleDateString(undefined, {
-                  day: "2-digit",
-                  month: "short"
-                });
-              }
+              callback: tickCallback(mode, min, max)
             },
             grid: { display: false }
           },
           y: {
+            title: { display: true, text: "Package price" },
             ticks: {
               callback: function (value) {
                 return money(value);
@@ -83,21 +167,99 @@
           }
         },
         plugins: {
-          legend: { labels: { boxWidth: 12, usePointStyle: true } },
+          legend: {
+            display: !snapshot,
+            labels: { boxWidth: 12, usePointStyle: true }
+          },
           tooltip: {
             callbacks: {
               title: function (items) {
                 if (!items.length) return "";
-                return new Date(items[0].parsed.x).toLocaleString();
+                var moment = new Date(items[0].parsed.x);
+                return snapshot
+                  ? moment.toLocaleDateString(undefined, {
+                      weekday: "short",
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric"
+                    })
+                  : moment.toLocaleString();
               },
               label: function (item) {
-                return item.dataset.label + ": " + money(item.parsed.y);
+                return snapshot
+                  ? money(item.parsed.y)
+                  : item.dataset.label + ": " + money(item.parsed.y);
               }
             }
           }
         }
       }
     });
+  }
+
+  function setupChart() {
+    var canvas = document.getElementById("price-chart");
+    if (!canvas) return;
+
+    var data = parseChart(canvas);
+    if (!data) return;
+
+    var hint = document.getElementById("chart-hint");
+    var buttons = Array.prototype.slice.call(
+      document.querySelectorAll("[data-chart-mode]")
+    );
+    var chart = null;
+
+    function caption(mode) {
+      if (!hint) return;
+      if (mode === "snapshot") {
+        hint.textContent =
+          "Latest price for each check-in date" +
+          (data.as_of
+            ? ", as of " + new Date(data.as_of).toLocaleString()
+            : "") +
+          ".";
+      } else if (data.checks < 2) {
+        hint.textContent =
+          "Only one check so far. A trend appears after the next check; " +
+          "flat segments mean no change was recorded.";
+      } else {
+        hint.textContent =
+          "One stepped line per check-in date; x is when we checked. " +
+          "Lines at the same price overlap exactly.";
+      }
+    }
+
+    function show(mode) {
+      if (chart) {
+        chart.destroy();
+        chart = null;
+      }
+      chart = draw(canvas, data, mode);
+      buttons.forEach(function (button) {
+        button.setAttribute(
+          "aria-pressed",
+          button.getAttribute("data-chart-mode") === mode ? "true" : "false"
+        );
+      });
+      caption(mode);
+    }
+
+    buttons.forEach(function (button) {
+      var mode = button.getAttribute("data-chart-mode");
+      button.disabled =
+        mode === "snapshot"
+          ? data.snapshot.length === 0
+          : data.time.length === 0;
+      button.addEventListener("click", function () {
+        show(mode);
+      });
+    });
+
+    var initial = data.default || "snapshot";
+    if (initial === "snapshot" && !data.snapshot.length) initial = "time";
+    if (initial === "time" && !data.time.length) initial = "snapshot";
+    show(initial);
   }
 
   function setupParty() {
@@ -173,7 +335,6 @@
   document.addEventListener("DOMContentLoaded", function () {
     setupParty();
     setupCheckAll();
-    var canvas = document.getElementById("price-chart");
-    if (canvas) draw(canvas);
+    setupChart();
   });
 })();

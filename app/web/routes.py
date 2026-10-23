@@ -281,7 +281,6 @@ def build_router(*, require_user) -> APIRouter:
             series=rows,
             chart=chart,
             market=market,
-            skipped=len(rows) - len(chart),
         )
 
     # --- health -----------------------------------------------------------
@@ -321,26 +320,53 @@ def _quote(value: str) -> str:
     return quote_plus(value)
 
 
-def _chart_payload(rows: list[queries.SeriesRow], limit: int = 12) -> list[dict]:
-    """Chart.js datasets: one stepped line per arrival date with history.
+def _chart_payload(rows: list[queries.SeriesRow], limit: int = 12) -> dict:
+    """Both views of the same data, plus which one to open by default.
 
-    Capped at the cheapest current arrivals. Thirty-odd overlapping lines is
-    not a chart, it is a smear.
+    - ``time``: one stepped line per arrival, x = when the price was recorded.
+      Capped at the cheapest arrivals; thirty overlapping lines is a smear.
+    - ``snapshot``: every currently priced arrival, x = check-in date. This is
+      the only honest view on the first day, when there is no trend yet.
+
+    The default follows the data: one check cannot make a time series, so it
+    opens the snapshot. After the second check the trend takes over.
     """
+
+    def short(day: date) -> str:
+        label = f"{day.day} {day.strftime('%b')}"
+        return f"{label} {day.year}" if day.year != date.today().year else label
+
     with_history = [row for row in rows if row.history]
     with_history.sort(key=lambda row: (row.price is None, row.price or Decimal("0")))
     chosen = with_history[:limit]
+    checks = sorted({when for row in rows for when, _ in row.history})
 
-    payload = []
-    for row in chosen:
-        payload.append(
-            {
-                "label": row.arrival.isoformat(),
-                "points": [
-                    [int(when.timestamp() * 1000), float(price)]
-                    for when, price in row.history
-                ],
-                "current": float(row.price) if row.price is not None else None,
-            }
-        )
-    return payload
+    time_series = [
+        {
+            "label": short(row.arrival),
+            "points": [
+                [int(when.timestamp() * 1000), float(price)]
+                for when, price in row.history
+            ],
+        }
+        for row in chosen
+    ]
+    snapshot = [
+        {
+            "date": row.arrival.isoformat(),
+            "price": float(row.price),
+            "label": short(row.arrival),
+        }
+        for row in rows
+        if row.price is not None and row.available
+    ]
+    as_of = max((row.observed_at for row in rows if row.observed_at), default=None)
+
+    return {
+        "time": time_series,
+        "snapshot": snapshot,
+        "default": "time" if len(checks) >= 2 else "snapshot",
+        "checks": len(checks),
+        "skipped": len(with_history) - len(chosen),
+        "as_of": as_of.isoformat() if as_of else None,
+    }

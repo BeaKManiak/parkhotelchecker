@@ -22,16 +22,24 @@
 </div>
 
 <section class="panel">
-  <h2>Price over time</h2>
-  {% if chart %}
-  <div class="chart-wrap">
-    <canvas id="price-chart" data-series='{{ chart|tojson }}' height="320"></canvas>
+  <h2>Price history</h2>
+  {% if chart.time or chart.snapshot %}
+  <div class="chart-controls">
+    <button type="button" class="ghost" data-chart-mode="snapshot">By check-in date</button>
+    <button type="button" class="ghost" data-chart-mode="time">Over time</button>
   </div>
-  <p class="hint">One line per arrival date{% if skipped %}; showing the {{ chart|length }}
-    cheapest of {{ chart|length + skipped }} tracked dates{% endif %}. Step lines: a price
-    holds until the next observation.</p>
+  <div class="chart-wrap">
+    <canvas id="price-chart" data-chart='{{ chart|tojson }}' height="320"></canvas>
+  </div>
+  <p class="hint" id="chart-hint"></p>
+  {% if chart.skipped %}
+  <p class="hint">Over time shows the {{ chart.time|length }} cheapest of
+    {{ chart.time|length + chart.skipped }} dates with history; the check-in view
+    shows every current price.</p>
+  {% endif %}
   {% else %}
-  <p class="muted">No prices recorded yet. The first successful check will start the lines.</p>
+  <p class="muted">No prices recorded yet. The first successful check will draw the
+    first points.</p>
   {% endif %}
 </section>
 
