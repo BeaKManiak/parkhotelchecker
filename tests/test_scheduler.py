@@ -9,6 +9,7 @@ import pytest
 from app import db
 from app.alerts.notifier import Notifier
 from app.tracking import planner
+from app.tracking.poller import PollResult
 from app.tracking.scheduler import Scheduler
 
 
@@ -72,3 +73,22 @@ async def test_a_forced_tick_asks_the_planner_to_ignore_cadence(
     await scheduler.run_once(force=True)
 
     assert seen["force"] is True
+
+
+async def test_test_mode_reaches_the_poller(conn: sqlite3.Connection, monkeypatch) -> None:
+    seen = {}
+
+    async def fake_execute(*args, **kwargs):
+        seen["record_all"] = kwargs.get("record_all")
+        return PollResult()
+
+    class NonEmptyPlan:
+        is_empty = False
+
+    monkeypatch.setattr(planner, "build_plan", lambda *a, **k: NonEmptyPlan())
+    monkeypatch.setattr("app.tracking.scheduler.execute", fake_execute)
+    scheduler = Scheduler(conn, client=None, record_all=True)
+
+    await scheduler.run_once()
+
+    assert seen["record_all"] is True
