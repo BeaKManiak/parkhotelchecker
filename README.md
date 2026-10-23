@@ -46,6 +46,9 @@ Two people use it. That is the scale it is built for.
 ### Before you start
 
 - Container Manager (or Docker with Compose v2) and terminal/SSH access.
+- Permission to use Docker. On many DSM setups a normal user cannot talk to the
+  Docker daemon; if `docker compose build` fails with `permission denied ...
+  docker.sock`, prefix the compose commands with `sudo` (see Troubleshooting).
 - The NAS's LAN IP, ideally reserved in your router's DHCP table so it does not
   move. The examples use `192.168.1.20`; substitute yours.
 - About ten minutes, most of it the first image build.
@@ -81,13 +84,26 @@ Edit `.env` and set at least:
 - `LAN_BIND_IP` — the NAS's LAN IP, never `0.0.0.0`.
 - `DATA_DIR` — where the database and its backups live. The examples use
   `/volume1/docker/parkhotelchecker/data`; use one path consistently.
-- `DASHBOARD_PASSWORD_HASH` — generated in the next step.
+- `DASHBOARD_PASSWORD_HASH` — generated below (Step 4).
 - Telegram values, if you want alerts (optional).
 
 `.env` holds secrets: never commit it, never paste it into a chat, and keep it
 mode `600`.
 
-### Step 3 — build, then generate the password hash
+### Step 3 — create the data folder
+
+```bash
+sudo mkdir -p /volume1/docker/parkhotelchecker/data
+sudo chown -R 1000:1000 /volume1/docker/parkhotelchecker/data
+```
+
+Use your own `DATA_DIR` instead of the example path, and do this **before** the
+next step: compose bind-mounts `${DATA_DIR}` into `/data`, and on DSM that mount
+fails if the folder does not exist yet. The `chown` matters too: the container
+runs as uid 1000, and a root-owned folder means SQLite cannot create its WAL
+files, so the container restarts in a loop.
+
+### Step 4 — build, then generate the password hash
 
 ```bash
 docker compose build
@@ -108,20 +124,13 @@ interpolation and truncates it; the symptom is an app that starts but rejects
 the correct password. The app now refuses an incomplete hash at startup and
 prints this same explanation, so the failure is not a mystery.
 
-### Step 4 — storage and start
+### Step 5 — start
 
 ```bash
-sudo mkdir -p /volume1/docker/parkhotelchecker/data
-sudo chown -R 1000:1000 /volume1/docker/parkhotelchecker/data
-
 docker compose up -d
 docker compose ps
 docker compose logs -f app
 ```
-
-Use your own `DATA_DIR` instead of the example path. The `chown` matters: the
-container runs as uid 1000, and a root-owned folder means SQLite cannot create
-its WAL files, so the container restarts in a loop.
 
 Healthy looks like: container status `healthy`, and logs showing the dashboard
 URL, "nightly backups: ...", and the scheduler starting. Open
@@ -131,7 +140,7 @@ The port is published as `LAN_BIND_IP:8080:8080`, never `0.0.0.0`. If you leave
 `LAN_BIND_IP` at its default (`127.0.0.1`) the dashboard is unreachable from
 your phone — that is deliberate, so an unfinished config fails closed.
 
-### Step 5 — create your first track
+### Step 6 — create your first track
 
 The dashboard is empty until you create a track. Click **New track** and fill
 in:
@@ -178,12 +187,18 @@ revoke it with BotFather if it leaks.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
+| `permission denied` on `/var/run/docker.sock` | Your NAS user may not use the Docker daemon | Prefix the compose commands with `sudo`; or, if the socket's group is `docker`, add your user to that group and log in again |
+| `Bind mount failed: '<DATA_DIR>' does not exist` | The data folder was created after the compose run | `sudo mkdir -p "$DATA_DIR" && sudo chown -R 1000:1000 "$DATA_DIR"`, then retry |
 | Container restarts in a loop | Data folder owned by root | `sudo chown -R 1000:1000 "$DATA_DIR"` |
 | Cannot sign in, password is right | Hash not single-quoted, or incomplete | Regenerate, single-quote it, `docker compose up -d` |
 | Unreachable from phone | `LAN_BIND_IP` still `127.0.0.1` | Set the NAS LAN IP, `docker compose up -d` |
 | HTTP 429 | 5 failed logins from one address in 10 minutes | Wait about ten minutes |
 | No prices on the track page | First poll still running, or upstream failing | Wait, refresh, check **Health** |
 | No Telegram messages | Token or chat ids unset/wrong | `docker compose logs app` shows the digest and the send error |
+
+Adding a user to the `docker` group is effectively giving them root on the NAS.
+That is usually acceptable on a personal machine, but `sudo` per command is the
+more conservative option. Never `chmod 666 /var/run/docker.sock`.
 
 ---
 
