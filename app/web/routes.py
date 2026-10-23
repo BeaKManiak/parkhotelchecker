@@ -328,8 +328,8 @@ def _chart_payload(rows: list[queries.SeriesRow], limit: int = 12) -> dict:
     - ``snapshot``: every currently priced arrival, x = check-in date. This is
       the only honest view on the first day, when there is no trend yet.
 
-    The default follows the data: one check cannot make a time series, so it
-    opens the snapshot. After the second check the trend takes over.
+    The time view is the default whenever there is history; the snapshot is
+    the fallback for a hotel whose prices have never been recorded.
     """
 
     def short(day: date) -> str:
@@ -365,7 +365,7 @@ def _chart_payload(rows: list[queries.SeriesRow], limit: int = 12) -> dict:
     return {
         "time": time_series,
         "snapshot": snapshot,
-        "default": "time" if len(checks) >= 2 else "snapshot",
+        "default": "time" if time_series else "snapshot",
         "checks": len(checks),
         "skipped": len(with_history) - len(chosen),
         "as_of": as_of.isoformat() if as_of else None,

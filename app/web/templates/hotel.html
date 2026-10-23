@@ -27,6 +27,12 @@
   <div class="chart-controls">
     <button type="button" class="ghost" data-chart-mode="snapshot">By check-in date</button>
     <button type="button" class="ghost" data-chart-mode="time">Over time</button>
+    <span class="chart-range" data-chart-range-group role="group"
+          aria-label="Time range">
+      <button type="button" class="ghost" data-chart-range="7">7 days</button>
+      <button type="button" class="ghost" data-chart-range="30">30 days</button>
+      <button type="button" class="ghost" data-chart-range="all">All</button>
+    </span>
   </div>
   <div class="chart-wrap">
     <canvas id="price-chart" data-chart='{{ chart|tojson }}' height="320"></canvas>

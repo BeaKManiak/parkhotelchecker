@@ -409,7 +409,7 @@ def test_hotel_page_carries_the_chart_data(client) -> None:
     assert http.get(f"/tracks/{track_id}/hotels/DDLH", auth=AUTH).status_code == 404
 
 
-def test_one_check_opens_the_check_in_view(client) -> None:
+def test_the_time_view_is_the_default_and_has_a_range_selector(client) -> None:
     http, conn, _ = client
     track_id = new_track(conn)
     seed_prices(conn, track_id, [820.00])
@@ -419,10 +419,12 @@ def test_one_check_opens_the_check_in_view(client) -> None:
     match = re.search(r"data-chart='([^']+)'", response.text)
     chart = json.loads(match.group(1))
     assert chart["checks"] == 1
-    assert chart["default"] == "snapshot"
-    assert chart["snapshot"]
+    assert chart["default"] == "time"
     assert "By check-in date" in response.text
     assert "Over time" in response.text
+    assert 'data-chart-range="7"' in response.text
+    assert 'data-chart-range="30"' in response.text
+    assert 'data-chart-range="all"' in response.text
 
 
 def test_trimming_the_window_keeps_the_track_and_changes_it(client) -> None:

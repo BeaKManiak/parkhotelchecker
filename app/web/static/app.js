@@ -73,12 +73,23 @@
     };
   }
 
-  function draw(canvas, data, mode) {
+  function draw(canvas, data, mode, rangeDays) {
     if (typeof window.Chart === "undefined") return null;
 
     var snapshot = mode === "snapshot";
     var datasets = [];
     var xs = [];
+    var cutoff = null;
+
+    if (!snapshot && rangeDays) {
+      var latest = -Infinity;
+      data.time.forEach(function (item) {
+        item.points.forEach(function (point) {
+          if (point[0] > latest) latest = point[0];
+        });
+      });
+      cutoff = latest - rangeDays * 86400000;
+    }
 
     if (snapshot) {
       var points = data.snapshot.map(function (point) {
@@ -102,29 +113,51 @@
         }
       ];
     } else {
-      datasets = data.time.map(function (item, index) {
-        var colour = PALETTE[index % PALETTE.length];
-        var points = item.points.map(function (point) {
-          return { x: point[0], y: point[1] };
+      datasets = data.time
+        .map(function (item, index) {
+          var colour = PALETTE[index % PALETTE.length];
+          var raw = item.points.map(function (point) {
+            return { x: point[0], y: point[1] };
+          });
+          var kept = raw;
+
+          if (cutoff !== null) {
+            kept = raw.filter(function (point) {
+              return point.x >= cutoff;
+            });
+            // Carry the last price from before the window into its left edge,
+            // so a stepped line enters the chart instead of starting mid-air.
+            var before = null;
+            raw.forEach(function (point) {
+              if (point.x < cutoff) before = point;
+            });
+            if (before) kept.unshift(before);
+            if (kept.length < 2 && (!kept.length || kept[0].x < cutoff)) {
+              return null;
+            }
+          }
+
+          xs = xs.concat(
+            kept.map(function (point) {
+              return point.x;
+            })
+          );
+          return {
+            label: item.label,
+            data: kept,
+            borderColor: colour,
+            backgroundColor: colour,
+            borderWidth: 2,
+            pointRadius: kept.length < 3 ? 3 : 0,
+            pointHoverRadius: 4,
+            stepped: true,
+            tension: 0,
+            spanGaps: true
+          };
+        })
+        .filter(function (dataset) {
+          return dataset !== null;
         });
-        xs = xs.concat(
-          points.map(function (point) {
-            return point.x;
-          })
-        );
-        return {
-          label: item.label,
-          data: points,
-          borderColor: colour,
-          backgroundColor: colour,
-          borderWidth: 2,
-          pointRadius: item.points.length < 3 ? 3 : 0,
-          pointHoverRadius: 4,
-          stepped: true,
-          tension: 0,
-          spanGaps: true
-        };
-      });
     }
 
     if (!xs.length) return null;
@@ -134,6 +167,7 @@
       if (x < min) min = x;
       if (x > max) max = x;
     });
+    if (cutoff !== null) min = cutoff;
 
     return new window.Chart(canvas, {
       type: "line",
@@ -147,6 +181,7 @@
         scales: {
           x: {
             type: "linear",
+            min: cutoff !== null ? cutoff : undefined,
             title: {
               display: true,
               text: snapshot ? "Check-in date" : "Price checked on"
@@ -205,12 +240,18 @@
     if (!data) return;
 
     var hint = document.getElementById("chart-hint");
-    var buttons = Array.prototype.slice.call(
+    var modeButtons = Array.prototype.slice.call(
       document.querySelectorAll("[data-chart-mode]")
     );
+    var rangeGroup = document.querySelector("[data-chart-range-group]");
+    var rangeButtons = Array.prototype.slice.call(
+      document.querySelectorAll("[data-chart-range]")
+    );
     var chart = null;
+    var mode = "time";
+    var range = "all";
 
-    function caption(mode) {
+    function caption() {
       if (!hint) return;
       if (mode === "snapshot") {
         hint.textContent =
@@ -219,44 +260,82 @@
             ? ", as of " + new Date(data.as_of).toLocaleString()
             : "") +
           ".";
-      } else if (data.checks < 2) {
+        return;
+      }
+      var windowText =
+        range === "all"
+          ? "All recorded history."
+          : "Last " + range + " days of recorded history.";
+      if (data.checks < 2) {
         hint.textContent =
-          "Only one check so far. A trend appears after the next check; " +
-          "flat segments mean no change was recorded.";
+          windowText +
+          " Only one check so far, so the lines are dots; more checks draw the trend.";
       } else {
         hint.textContent =
-          "One stepped line per check-in date; x is when we checked. " +
+          windowText +
+          " One stepped line per check-in date; x is when we checked. " +
           "Lines at the same price overlap exactly.";
       }
     }
 
-    function show(mode) {
+    function show(nextMode) {
+      mode = nextMode;
       if (chart) {
         chart.destroy();
         chart = null;
       }
-      chart = draw(canvas, data, mode);
-      buttons.forEach(function (button) {
+      chart = draw(
+        canvas,
+        data,
+        mode,
+        range === "all" ? null : Number(range)
+      );
+      modeButtons.forEach(function (button) {
         button.setAttribute(
           "aria-pressed",
           button.getAttribute("data-chart-mode") === mode ? "true" : "false"
         );
       });
-      caption(mode);
+      if (rangeGroup) rangeGroup.hidden = mode !== "time";
+      caption();
     }
 
-    buttons.forEach(function (button) {
-      var mode = button.getAttribute("data-chart-mode");
+    function useRange(nextRange) {
+      range = nextRange;
+      rangeButtons.forEach(function (button) {
+        button.setAttribute(
+          "aria-pressed",
+          button.getAttribute("data-chart-range") === range ? "true" : "false"
+        );
+      });
+      if (mode === "time") show("time");
+    }
+
+    modeButtons.forEach(function (button) {
+      var nextMode = button.getAttribute("data-chart-mode");
       button.disabled =
-        mode === "snapshot"
+        nextMode === "snapshot"
           ? data.snapshot.length === 0
           : data.time.length === 0;
       button.addEventListener("click", function () {
-        show(mode);
+        show(nextMode);
       });
     });
 
-    var initial = data.default || "snapshot";
+    rangeButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        useRange(button.getAttribute("data-chart-range"));
+      });
+    });
+
+    rangeButtons.forEach(function (button) {
+      button.setAttribute(
+        "aria-pressed",
+        button.getAttribute("data-chart-range") === "all" ? "true" : "false"
+      );
+    });
+
+    var initial = data.default || "time";
     if (initial === "snapshot" && !data.snapshot.length) initial = "time";
     if (initial === "time" && !data.time.length) initial = "snapshot";
     show(initial);
