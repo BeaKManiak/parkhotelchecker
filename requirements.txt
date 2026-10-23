@@ -1,0 +1,32 @@
+# Pinned runtime dependencies for the container.
+#
+# Exact versions, deliberately without hashes: hashes generated on a Mac
+# (arm64) do not cover the NAS (x86_64) wheels, and a hash-pinned file would
+# fail on whichever platform did not produce it. Versions are pinned; update
+# them deliberately with a scratch venv, then run the offline tests and
+# rebuild the image.
+#
+# Generated from the dependency closure of the pyproject runtime dependencies
+# on 2026-10-23 (Python 3.14.9).
+
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+bcrypt==5.0.0
+certifi==2026.10.19
+click==8.5.0
+fastapi==0.159.1
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.20
+jinja2==3.1.6
+markupsafe==3.0.4
+opentelemetry-api==1.45.1
+pydantic==2.14.1
+pydantic-core==2.50.1
+python-multipart==0.0.32
+starlette==1.9.0
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+uvicorn==0.54.0

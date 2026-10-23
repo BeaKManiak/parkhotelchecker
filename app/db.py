@@ -17,7 +17,7 @@ import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_V1: tuple[str, ...] = (
     """
@@ -160,6 +160,15 @@ SCHEMA_V2: tuple[str, ...] = (
 )
 
 
+SCHEMA_V3: tuple[str, ...] = (
+    # The planner asks for the latest attempt per (source, key) on every tick.
+    # Without this index that is a full scan of the append-only fetch_log:
+    # measured at 28 ms per tick with 100k rows and 188 ms with 500k. The
+    # index makes the same question ~6x cheaper and costs one entry per request.
+    "CREATE INDEX ix_fetch_log_source_key ON fetch_log(source, key, requested_at)",
+)
+
+
 def connect(path: str | Path) -> sqlite3.Connection:
     """Open (and migrate) a database. `:memory:` is allowed for tests.
 
@@ -186,6 +195,9 @@ def migrate(conn: sqlite3.Connection) -> None:
             conn.execute(statement)
     if version < 2:
         for statement in SCHEMA_V2:
+            conn.execute(statement)
+    if version < 3:
+        for statement in SCHEMA_V3:
             conn.execute(statement)
     conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.commit()

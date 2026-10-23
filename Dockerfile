@@ -1,6 +1,6 @@
-# Python 3.14 everywhere: same version locally and in the container, so a bug
-# cannot hide behind an interpreter difference.
-FROM python:3.14-slim
+# Python 3.14 everywhere: the same patch version locally and in the container,
+# so a bug cannot hide behind an interpreter difference.
+FROM python:3.14.9-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -9,11 +9,16 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Dependencies first, source second: changing a template does not reinstall
-# the world on the NAS.
+# Dependency layer: changes only when the pinned set changes, so editing a
+# template or a Python file does not reinstall the world on the NAS.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Source layer: install the project itself without re-resolving dependencies
+# (they are already pinned above).
 COPY pyproject.toml ./
 COPY app ./app
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir --no-deps .
 
 # Non-root, with a writable data directory and nothing else.
 RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin app \
