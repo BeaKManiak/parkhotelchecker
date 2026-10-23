@@ -20,6 +20,14 @@ COPY pyproject.toml ./
 COPY app ./app
 RUN pip install --no-cache-dir --no-deps .
 
+# COPY preserves the build context's file modes. A NAS checkout under a
+# restrictive umask (0077 is common on DSM) therefore lands as 0600/0700 and
+# root-owned, which uid 1000 cannot read: `python -m app` then dies with
+# PermissionError on /app/app/__init__.py. Make the tree readable regardless
+# of the umask that produced it. The capital X only adds execute to
+# directories, not to .py files.
+RUN chmod -R a+rX /app
+
 # Non-root, with a writable data directory and nothing else.
 RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin app \
     && mkdir -p /data \
