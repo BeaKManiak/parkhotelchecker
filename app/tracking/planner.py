@@ -91,7 +91,13 @@ def _due(last: datetime | None, *, now: datetime, cadence_hours: int, key: str) 
     return now >= next_due
 
 
-def build_plan(conn: sqlite3.Connection, *, now: datetime | None = None) -> Plan:
+def build_plan(
+    conn: sqlite3.Connection,
+    *,
+    now: datetime | None = None,
+    force: bool = False,
+) -> Plan:
+    """What to fetch now. ``force`` ignores cadence (test mode only)."""
     now = now or datetime.now(timezone.utc)
     today = now.date()
     attempts = _last_attempts(conn)
@@ -169,7 +175,8 @@ def build_plan(conn: sqlite3.Connection, *, now: datetime | None = None) -> Plan
     due_packages = tuple(
         task
         for task in sorted(packages.values(), key=lambda t: t.key)
-        if _due(
+        if force
+        or _due(
             attempts.get(("packages", task.key)),
             now=now,
             cadence_hours=cadences[task.key],
@@ -179,7 +186,8 @@ def build_plan(conn: sqlite3.Connection, *, now: datetime | None = None) -> Plan
     due_tickets = tuple(
         task
         for task in sorted(tickets.values(), key=lambda t: t.key)
-        if _due(
+        if force
+        or _due(
             attempts.get(("tickets", task.key)),
             now=now,
             cadence_hours=TICKET_CADENCE_HOURS,

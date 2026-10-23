@@ -141,6 +141,7 @@ def _record(
     available: bool,
     now: datetime,
     arrival: date | None,
+    record_all: bool = False,
 ) -> Written | None:
     previous = latest_observation(conn, series_id)
     previous_price = from_cents(previous["price_cents"]) if previous else None
@@ -152,7 +153,7 @@ def _record(
         kind: Kind = "first"
     elif previous_price != price or bool(previous["available"]) != available:
         kind = "change"
-    elif now - _parse_iso(previous["observed_at"]) >= HEARTBEAT_AFTER:
+    elif record_all or now - _parse_iso(previous["observed_at"]) >= HEARTBEAT_AFTER:
         kind = "heartbeat"
     else:
         return None
@@ -180,6 +181,7 @@ def record_package_calendar(
     *,
     party_id: int,
     now: datetime | None = None,
+    record_all: bool = False,
 ) -> list[Written]:
     """Apply one month's package response to every series it covers.
 
@@ -220,6 +222,7 @@ def record_package_calendar(
             available=day is not None,
             now=now,
             arrival=arrival,
+            record_all=record_all,
         )
         if entry:
             written.append(entry)
@@ -235,6 +238,7 @@ def record_ticket_calendar(
     children: int,
     party_id: int,
     now: datetime | None = None,
+    record_all: bool = False,
 ) -> list[Written]:
     """Ticket prices share one history across tracks, keyed by party + date."""
     now = now or utcnow()
@@ -268,7 +272,7 @@ def record_ticket_calendar(
             kind: Kind = "first"
         elif previous_total != total or bool(previous["available"]) != day.available:
             kind = "change"
-        elif now - _parse_iso(previous["observed_at"]) >= HEARTBEAT_AFTER:
+        elif record_all or now - _parse_iso(previous["observed_at"]) >= HEARTBEAT_AFTER:
             kind = "heartbeat"
         else:
             continue

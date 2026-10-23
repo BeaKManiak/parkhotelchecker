@@ -33,6 +33,7 @@ class Scheduler:
         min_gap_seconds: float = 0.25,
         notifier=None,
         backup_dir: str | None = None,
+        record_all: bool = False,
     ) -> None:
         self._conn = conn
         self._client = client
@@ -41,8 +42,11 @@ class Scheduler:
         self._min_gap = min_gap_seconds
         self._notifier = notifier
         self._backup_dir = backup_dir
+        self._record_all = record_all
 
-    async def run_once(self, *, now: datetime | None = None) -> PollResult:
+    async def run_once(
+        self, *, now: datetime | None = None, force: bool = False
+    ) -> PollResult:
         now = now or datetime.now(timezone.utc)
 
         # Once a day, before any fetching: cheap existence check on every tick.
@@ -53,7 +57,7 @@ class Scheduler:
                 log.exception("backup failed")
 
         try:
-            plan = planner.build_plan(self._conn, now=now)
+            plan = planner.build_plan(self._conn, now=now, force=force)
         except Exception as exc:  # a planner bug must not kill the loop
             log.exception("planner failed")
             health.record_failure(
@@ -78,6 +82,7 @@ class Scheduler:
                 now=now,
                 concurrency=self._concurrency,
                 min_gap_seconds=self._min_gap,
+                record_all=self._record_all,
             )
         except Exception as exc:  # e.g. an unexpected exception inside a task
             log.error("poll crashed: %s\n%s", exc, traceback.format_exc())

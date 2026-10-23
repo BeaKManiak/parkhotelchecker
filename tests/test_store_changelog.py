@@ -78,10 +78,12 @@ def make_track(conn: sqlite3.Connection, *, arrivals: list[date], hotel: str = "
     )
 
 
-def record(conn, cal, *, now=None):
+def record(conn, cal, *, now=None, record_all=False):
     """Record a package calendar for the party in the database."""
     party_id = conn.execute("SELECT id FROM party").fetchone()["id"]
-    return store.record_package_calendar(conn, cal, party_id=party_id, now=now)
+    return store.record_package_calendar(
+        conn, cal, party_id=party_id, now=now, record_all=record_all
+    )
 
 
 def observation_count(conn: sqlite3.Connection) -> int:
@@ -158,6 +160,25 @@ def test_a_day_of_silence_writes_one_heartbeat(conn: sqlite3.Connection) -> None
 
     # ...and only once: a second poll inside the next 24h writes nothing.
     assert record(conn, cal, now=now + timedelta(hours=26)) == []
+
+
+def test_test_mode_records_every_poll(conn: sqlite3.Connection) -> None:
+    base = month_start()
+    arrivals = [base, base + timedelta(days=1)]
+    make_track(conn, arrivals=arrivals)
+    cal = package_calendar({a: Decimal("600.00") for a in arrivals})
+
+    now = datetime(2026, 10, 22, 10, tzinfo=timezone.utc)
+    record(conn, cal, now=now)
+
+    written = record(conn, cal, now=now + timedelta(hours=1), record_all=True)
+    assert len(written) == 2
+    assert {w.kind for w in written} == {"heartbeat"}
+
+    # Without the flag the same second check is silent, as before.
+    assert record(conn, cal, now=now + timedelta(hours=2)) == []
+    # With it, every check writes.
+    assert len(record(conn, cal, now=now + timedelta(hours=3), record_all=True)) == 2
 
 
 def test_a_disappearing_date_becomes_sold_out(conn: sqlite3.Connection) -> None:

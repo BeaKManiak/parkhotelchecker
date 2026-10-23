@@ -139,6 +139,7 @@ def create_app(
     check_now=None,
     user: str | None = None,
     password_hash: str | None = None,
+    test_mode: bool = False,
 ) -> FastAPI:
     if user is None or password_hash is None:
         env_user, env_hash = auth.settings_from_env()
@@ -146,6 +147,7 @@ def create_app(
         password_hash = password_hash or env_hash
 
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+    templates.env.globals["test_mode"] = test_mode
     templates.env.filters.update(
         money=_money,
         local=_local,
@@ -197,10 +199,13 @@ def create_app(
             if scheduler is None:
                 log.info("check-now ignored: no scheduler attached")
                 return
+            if any(not task.done() for task in app.state.tasks):
+                log.info("check-now ignored: a manual check is already running")
+                return
 
             async def runner() -> None:
                 try:
-                    await scheduler.run_once()
+                    await scheduler.run_once(force=test_mode)
                 except Exception:  # noqa: BLE001 - a manual check must not 500
                     log.exception("manual check failed")
 

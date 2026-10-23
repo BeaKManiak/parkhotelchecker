@@ -142,6 +142,23 @@ def test_security_headers_are_present(client) -> None:
     assert response.headers["referrer-policy"] == "no-referrer"
 
 
+def test_test_mode_is_visible_in_the_dashboard() -> None:
+    conn = db.connect(":memory:")
+    app = create_app(
+        conn=conn,
+        user=AUTH[0],
+        password_hash=PASSWORD_HASH,
+        check_now=lambda: None,
+        test_mode=True,
+    )
+    with TestClient(app) as http:
+        response = http.get("/", auth=AUTH)
+    conn.close()
+
+    assert "Test mode" in response.text
+    assert "TEST_MODE" in response.text
+
+
 def test_the_new_track_form_lists_every_hotel(client) -> None:
     http, _, _ = client
     response = http.get("/tracks/new", auth=AUTH)

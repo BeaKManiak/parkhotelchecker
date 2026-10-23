@@ -54,3 +54,21 @@ async def test_a_healthy_empty_tick_sends_nothing(conn: sqlite3.Connection) -> N
 
     assert result.requests == 0
     assert telegram.messages == []
+
+
+async def test_a_forced_tick_asks_the_planner_to_ignore_cadence(
+    conn: sqlite3.Connection, monkeypatch
+) -> None:
+    seen = {}
+    real = planner.build_plan
+
+    def spy(connection, *, now=None, force=False):
+        seen["force"] = force
+        return real(connection, now=now)
+
+    monkeypatch.setattr(planner, "build_plan", spy)
+    scheduler = Scheduler(conn, client=None)
+
+    await scheduler.run_once(force=True)
+
+    assert seen["force"] is True

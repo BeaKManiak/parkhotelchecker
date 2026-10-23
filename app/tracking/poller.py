@@ -108,6 +108,7 @@ async def execute(
     now: datetime | None = None,
     concurrency: int = 4,
     min_gap_seconds: float = 0.25,
+    record_all: bool = False,
     package_fetcher: PackageFetcher = fetch_package,
     ticket_fetcher: TicketFetcher = fetch_ticket,
 ) -> PollResult:
@@ -139,7 +140,8 @@ async def execute(
                 return
 
             written = store.record_package_calendar(
-                conn, calendar, party_id=task.party_id, now=now
+                conn, calendar, party_id=task.party_id, now=now,
+                record_all=record_all,
             )
             _record_success(conn, "packages", task.key, now)
             result.packages_ok += 1
@@ -172,6 +174,7 @@ async def execute(
                 children=task.children,
                 party_id=task.party_id,
                 now=now,
+                record_all=record_all,
             )
             _record_success(conn, "tickets", task.key, now)
             result.tickets_ok += 1

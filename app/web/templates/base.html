@@ -19,6 +19,10 @@
   </header>
 
   <main>
+    {% if test_mode %}
+    <p class="banner">Test mode: every check is stored and “Check now” ignores the
+      schedule. Turn <code>TEST_MODE</code> off when done.</p>
+    {% endif %}
     {% if msg %}<p class="flash ok">{{ msg }}</p>{% endif %}
     {% if err %}<p class="flash bad">{{ err }}</p>{% endif %}
     {% block content %}{% endblock %}

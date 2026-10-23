@@ -108,6 +108,10 @@ def test_nothing_is_due_immediately_after_a_fetch(conn: sqlite3.Connection) -> N
 
     assert planner.build_plan(conn, now=now + timedelta(minutes=5)).packages == ()
 
+    # Test mode forces the same bucket even though its cadence has not elapsed.
+    forced = planner.build_plan(conn, now=now + timedelta(minutes=5), force=True)
+    assert len(forced.packages) == 1
+
 
 def test_jitter_is_deterministic_and_bounded() -> None:
     key = "DCHH|es-es|2027-01|2n_3j|1"

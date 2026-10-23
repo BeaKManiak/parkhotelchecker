@@ -15,6 +15,7 @@ Environment:
   TELEGRAM_CHAT_IDS       optional; comma-separated chat ids
   BACKUP_DIR              default <db folder>/backups; empty string disables
   POLL_INTERVAL_SECONDS   default 60 (how often to *look* for due work)
+  TEST_MODE               0/1, default 0; records every check and forces Check now
   ALLOW_PUBLIC_BIND       only for containers; see _dashboard_host
   LOG_LEVEL               default INFO
 """
@@ -47,6 +48,10 @@ def _env_int(name: str, default: int) -> int:
         raise SystemExit(f"{name} must be an integer, got {raw!r}") from None
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _dashboard_host() -> str:
     host = os.environ.get("HOST", "127.0.0.1").strip()
     if host in {"0.0.0.0", "::", "[::]"} and os.environ.get("ALLOW_PUBLIC_BIND") != "1":
@@ -73,6 +78,12 @@ async def main() -> int:
     log.info("database: %s", db_path)
 
     interval = _env_int("POLL_INTERVAL_SECONDS", _env_int("POLL_INTERVAL", 60))
+    test_mode = _env_flag("TEST_MODE")
+    if test_mode:
+        log.warning(
+            "TEST MODE on: every check is stored and Check now ignores cadence; "
+            "turn TEST_MODE off when done"
+        )
     host = _dashboard_host()
     port = _env_int("PORT", 8080)
 
@@ -92,8 +103,9 @@ async def main() -> int:
             interval_seconds=interval,
             notifier=notifier,
             backup_dir=backup_dir,
+            record_all=test_mode,
         )
-        app = create_app(conn=conn, scheduler=scheduler)
+        app = create_app(conn=conn, scheduler=scheduler, test_mode=test_mode)
         server = uvicorn.Server(
             uvicorn.Config(
                 app,

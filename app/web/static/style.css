@@ -62,6 +62,16 @@ h3 { font-size: 15px; margin: 22px 0 8px; text-transform: uppercase; letter-spac
 
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 
+.banner {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--low);
+  border-radius: var(--radius);
+  background: var(--low-bg);
+  color: var(--low);
+  font-size: 14px;
+}
+
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

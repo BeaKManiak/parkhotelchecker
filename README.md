@@ -271,6 +271,7 @@ Everything comes from the environment. The container reads `.env`.
 | `HOST` | `127.0.0.1` | Bind address. `0.0.0.0` is refused unless `ALLOW_PUBLIC_BIND=1`. |
 | `PORT` | `8080` | Dashboard port. |
 | `POLL_INTERVAL_SECONDS` | `60` | How often to *look* for due work, not how often to fetch. |
+| `TEST_MODE` | `0` | Development only: record every check and let “Check now” ignore cadence. |
 | `LOG_LEVEL` | `INFO` | Standard logging level. |
 | `LAN_BIND_IP` | `127.0.0.1` | Compose only: the LAN address to publish on. |
 | `DATA_DIR` | `./data` | Compose only: host folder mounted at `/data`. |
@@ -324,6 +325,8 @@ A row is written to the change-log only when:
 - availability differs (sold out, or back), or
 - 24 hours have passed with no change (a heartbeat, so the chart has a pulse).
 
+With `TEST_MODE=1`, every check writes a row instead; see [Test mode](#test-mode-development-only).
+
 Two absences are *not* the same thing:
 
 - **Sold out** — the date was seen before and is missing from today's response.
@@ -342,6 +345,29 @@ refused with a message to split the track: one track prices one party.
 Prices are stored in the currency implied by the market, which is *not* in the
 payload. `es-es` is EUR; `en-gb` is GBP; `fr-ch` is CHF. A missing market in the
 currency map is an error, never a default.
+
+---
+
+## Test mode (development only)
+
+Set `TEST_MODE=1` in `.env` and recreate the container:
+
+```bash
+docker compose up -d --force-recreate app
+```
+
+While it is on:
+
+- every poll writes an observation, even when the price has not changed, so the
+  chart gets a point per check instead of one per change or per day;
+- **Check now** fetches every watched bucket immediately, ignoring the 6-hour
+  and 24-hour cadence. Scheduled polls still honour it.
+
+It is off by default. Expect roughly four times the normal Spanish-market row
+count at 6-hourly polling. The extra rows are ordinary heartbeats: alerts
+ignore them, but they stay in the history. The dashboard shows a warning banner
+and the startup log says so, so it is hard to leave on by accident. Turn it off
+and restart when you are done.
 
 ---
 
