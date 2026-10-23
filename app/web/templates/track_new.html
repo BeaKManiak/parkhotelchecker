@@ -23,29 +23,33 @@
 
   <fieldset>
     <legend>Party</legend>
-    <div class="grid" data-party data-max-party="{{ max_party }}">
-      <label class="field">
-        <span>Adults</span>
-        <select name="adults" data-adults>
-          {% for n in range(1, max_party + 1) %}
-          <option value="{{ n }}" {{ 'selected' if form.adults|int == n }}>{{ n }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label class="field">
-        <span>Children</span>
-        <select name="children_count" data-children>
-          {% for n in range(0, max_party - form.adults|int + 1) %}
-          <option value="{{ n }}" {{ 'selected' if form.children_count|int == n }}>{{ n }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      {% for birthdate in form.children %}
-      <label class="field" data-child-field>
-        <span>Child {{ loop.index }} birthdate</span>
-        <input type="date" name="child" value="{{ birthdate }}">
-      </label>
-      {% endfor %}
+    <div data-party data-max-party="{{ max_party }}">
+      <div class="grid party-counts">
+        <label class="field">
+          <span>Adults</span>
+          <select name="adults" data-adults>
+            {% for n in range(1, max_party + 1) %}
+            <option value="{{ n }}" {{ 'selected' if form.adults|int == n }}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Children</span>
+          <select name="children_count" data-children>
+            {% for n in range(0, max_party - form.adults|int + 1) %}
+            <option value="{{ n }}" {{ 'selected' if form.children_count|int == n }}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="grid child-fields">
+        {% for birthdate in form.children %}
+        <label class="field" data-child-field>
+          <span>Child {{ loop.index }} birthdate</span>
+          <input type="date" name="child" value="{{ birthdate }}">
+        </label>
+        {% endfor %}
+      </div>
     </div>
     <p class="hint">A room holds up to {{ max_party }} people, adults and children together.
       Children under 3 on the arrival date travel free and are left out of the price
