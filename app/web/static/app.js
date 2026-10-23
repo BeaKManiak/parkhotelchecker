@@ -143,7 +143,7 @@
         maintainAspectRatio: false,
         interaction: snapshot
           ? { mode: "nearest", axis: "x", intersect: false }
-          : { mode: "index", axis: "x", intersect: false },
+          : { mode: "x", axis: "x", intersect: false },
         scales: {
           x: {
             type: "linear",
