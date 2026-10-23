@@ -105,7 +105,9 @@ async def main() -> int:
             backup_dir=backup_dir,
             record_all=test_mode,
         )
-        app = create_app(conn=conn, scheduler=scheduler, test_mode=test_mode)
+        app = create_app(
+            conn=conn, scheduler=scheduler, test_mode=test_mode, telegram=telegram
+        )
         server = uvicorn.Server(
             uvicorn.Config(
                 app,

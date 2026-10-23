@@ -8,6 +8,7 @@ import pytest
 
 from app import db
 from app.alerts.notifier import Notifier
+from app.alerts.telegram import Delivery
 from app.tracking import planner
 from app.tracking.poller import PollResult
 from app.tracking.scheduler import Scheduler
@@ -17,9 +18,9 @@ class FakeTelegram:
     def __init__(self) -> None:
         self.messages: list[str] = []
 
-    async def send(self, text: str) -> bool:
+    async def deliver(self, text: str) -> list[Delivery]:
         self.messages.append(text)
-        return True
+        return [Delivery("test", True, 200)]
 
 
 @pytest.fixture
@@ -63,9 +64,9 @@ async def test_a_forced_tick_asks_the_planner_to_ignore_cadence(
     seen = {}
     real = planner.build_plan
 
-    def spy(connection, *, now=None, force=False):
+    def spy(connection, *, now=None, force=False, track_id=None):
         seen["force"] = force
-        return real(connection, now=now)
+        return real(connection, now=now, track_id=track_id)
 
     monkeypatch.setattr(planner, "build_plan", spy)
     scheduler = Scheduler(conn, client=None)
@@ -73,6 +74,42 @@ async def test_a_forced_tick_asks_the_planner_to_ignore_cadence(
     await scheduler.run_once(force=True)
 
     assert seen["force"] is True
+
+
+class FakeNotifier:
+    def __init__(self) -> None:
+        self.calls: list[tuple[int | None, bool]] = []
+
+    async def on_poll(
+        self, result, now=None, *, track_id=None, announce_test=False
+    ) -> None:
+        self.calls.append((track_id, announce_test))
+
+
+async def test_a_manual_check_scope_reaches_planner_and_notifier(
+    conn: sqlite3.Connection, monkeypatch
+) -> None:
+    seen = {}
+
+    class NonEmptyPlan:
+        is_empty = False
+
+    def spy(connection, *, now=None, force=False, track_id=None):
+        seen.update(force=force, track_id=track_id)
+        return NonEmptyPlan()
+
+    async def fake_execute(*args, **kwargs):
+        return PollResult()
+
+    monkeypatch.setattr(planner, "build_plan", spy)
+    monkeypatch.setattr("app.tracking.scheduler.execute", fake_execute)
+    notifier = FakeNotifier()
+    scheduler = Scheduler(conn, client=None, notifier=notifier)
+
+    await scheduler.run_once(force=True, track_id=7, announce_test=True)
+
+    assert seen == {"force": True, "track_id": 7}
+    assert notifier.calls == [(7, True)]
 
 
 async def test_test_mode_reaches_the_poller(conn: sqlite3.Connection, monkeypatch) -> None:

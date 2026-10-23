@@ -332,6 +332,9 @@ def delete_track(conn: sqlite3.Connection, track_id: int) -> None:
     conn.execute("DELETE FROM track_series WHERE track_id = ?", (track_id,))
     conn.execute("DELETE FROM track_hotel WHERE track_id = ?", (track_id,))
     conn.execute("DELETE FROM track_market WHERE track_id = ?", (track_id,))
+    conn.execute(
+        "DELETE FROM alert_state WHERE key = ?", (f"first_check:{track_id}",)
+    )
     conn.execute("DELETE FROM track WHERE id = ?", (track_id,))
     conn.commit()
 

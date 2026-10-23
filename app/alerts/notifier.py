@@ -14,7 +14,8 @@ from datetime import datetime
 
 from app.alerts import failures
 from app.alerts.digest import build_digest
-from app.alerts.telegram import Telegram
+from app.alerts.summary import build_first_checks, build_test_summary
+from app.alerts.telegram import Telegram, mask_chat
 from app.tracking import health
 from app.tracking.poller import PollResult
 from app.tracking.store import utcnow
@@ -31,7 +32,14 @@ class Notifier:
     def enabled(self) -> bool:
         return self._telegram is not None
 
-    async def on_poll(self, result: PollResult, now: datetime | None = None) -> list[str]:
+    async def on_poll(
+        self,
+        result: PollResult,
+        now: datetime | None = None,
+        *,
+        track_id: int | None = None,
+        announce_test: bool = False,
+    ) -> list[str]:
         """Send at most a couple of messages per poll. Returns what was sent."""
         now = now or utcnow()
         messages: list[str] = []
@@ -48,6 +56,26 @@ class Notifier:
         except Exception:  # noqa: BLE001
             log.exception("could not build digest")
 
+        try:
+            messages.extend(build_first_checks(self._conn, now=now))
+        except Exception:  # noqa: BLE001
+            log.exception("could not build first-check messages")
+
+        if announce_test and track_id is not None:
+            try:
+                message = build_test_summary(
+                    self._conn,
+                    track_id,
+                    requests=result.requests,
+                    changes=len(result.changes),
+                    errors=len(result.errors),
+                    now=now,
+                )
+                if message:
+                    messages.append(message)
+            except Exception:  # noqa: BLE001
+                log.exception("could not build test-check message")
+
         sent: list[str] = []
         for message in messages:
             if await self.send(message, now=now):
@@ -62,14 +90,21 @@ class Notifier:
             return False
 
         try:
-            ok = await self._telegram.send(message)
+            deliveries = await self._telegram.deliver(message)
         except Exception:  # noqa: BLE001
             log.exception("telegram send blew up")
-            ok = False
+            deliveries = []
 
+        ok = bool(deliveries) and all(delivery.ok for delivery in deliveries)
         if ok:
             health.record_success(self._conn, "telegram", now=now)
         else:
-            health.record_failure(self._conn, "telegram", "send failed", now=now)
+            failures = [delivery for delivery in deliveries if not delivery.ok]
+            detail = "; ".join(
+                f"{mask_chat(delivery.chat_id)}: "
+                f"{delivery.detail or ('HTTP ' + str(delivery.status) if delivery.status else 'send failed')}"
+                for delivery in failures
+            ) or "send failed"
+            health.record_failure(self._conn, "telegram", detail, now=now)
             log.error("telegram rejected or dropped an alert:\n%s", message)
         return ok

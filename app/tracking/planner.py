@@ -96,14 +96,26 @@ def build_plan(
     *,
     now: datetime | None = None,
     force: bool = False,
+    track_id: int | None = None,
 ) -> Plan:
-    """What to fetch now. ``force`` ignores cadence (test mode only)."""
+    """What to fetch now.
+
+    ``force`` ignores cadence; ``track_id`` limits the plan to one track
+    (the Check now button). Both are user-initiated; scheduled ticks use
+    neither.
+    """
     now = now or datetime.now(timezone.utc)
     today = now.date()
     attempts = _last_attempts(conn)
 
+    package_filter = ""
+    package_params: tuple[int, ...] = ()
+    if track_id is not None:
+        package_filter = "AND ts.track_id = ?"
+        package_params = (track_id,)
+
     rows = conn.execute(
-        """
+        f"""
         SELECT s.hotel_code, s.market, s.arrival_date, s.los, s.party_id,
                p.adults, p.child_birthdates, MIN(tm.cadence_hours) AS cadence_hours
         FROM track_series ts
@@ -112,10 +124,11 @@ def build_plan(
         JOIN series s       ON s.id = ts.series_id
         JOIN party p        ON p.id = s.party_id
         JOIN track_market tm ON tm.track_id = t.id AND tm.market = s.market
-        WHERE ts.watched = 1
+        WHERE ts.watched = 1 {package_filter}
         GROUP BY s.hotel_code, s.market, s.arrival_date, s.los, s.party_id,
                  p.adults, p.child_birthdates
-        """
+        """,
+        package_params,
     ).fetchall()
 
     packages: dict[str, PackageTask] = {}
@@ -141,13 +154,20 @@ def build_plan(
         current = int(row["cadence_hours"])
         cadences[task.key] = current if previous is None else min(previous, current)
 
+    ticket_filter = ""
+    ticket_params: tuple[int, ...] = ()
+    if track_id is not None:
+        ticket_filter = "AND t.id = ?"
+        ticket_params = (track_id,)
+
     tickets: dict[str, TicketTask] = {}
     for track in conn.execute(
-        """
+        f"""
         SELECT t.id, t.los, t.party_id, t.arrival_start, t.arrival_end, p.adults, p.child_birthdates
         FROM track t JOIN party p ON p.id = t.party_id
-        WHERE t.status = 'active' AND t.archived_at IS NULL
-        """
+        WHERE t.status = 'active' AND t.archived_at IS NULL {ticket_filter}
+        """,
+        ticket_params,
     ):
         children = len(json.loads(track["child_birthdates"]))
         duration = config.park_days(track["los"])

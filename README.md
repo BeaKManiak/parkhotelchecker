@@ -167,6 +167,9 @@ guessing.
    to the group first.
 4. Put one or more ids, comma-separated, in `TELEGRAM_CHAT_IDS`, then
    `docker compose up -d` to recreate the container with the new environment.
+5. Open **Health → Telegram** and press **Send test message**. It reports the
+   result per chat, or the exact API error (`chat not found`, wrong token, bot
+   blocked).
 
 Without a token the app still tracks and charts; each digest is written to
 `docker compose logs app` instead of being sent. Keep the token private and
@@ -185,7 +188,7 @@ revoke it with BotFather if it leaks.
 | Unreachable from phone | `LAN_BIND_IP` still `127.0.0.1` | Set the NAS LAN IP, `docker compose up -d` |
 | HTTP 429 | 5 failed logins from one address in 10 minutes | Wait about ten minutes |
 | No prices on the track page | First poll still running, or upstream failing | Wait, refresh, check **Health** |
-| No Telegram messages | Token or chat ids unset/wrong | `docker compose logs app` shows the digest and the send error |
+| No Telegram messages | Token or chat ids unset/wrong, or no shortlisted hotel has moved | Open **Health → Telegram** and press **Send test message**; it reports each chat's result and the API's own error |
 
 Adding a user to the `docker` group is effectively giving them root on the NAS.
 That is usually acceptable on a personal machine, but `sudo` per command is the
@@ -260,7 +263,7 @@ Everything comes from the environment. The container reads `.env`.
 | `HOST` | `127.0.0.1` | Bind address. `0.0.0.0` is refused unless `ALLOW_PUBLIC_BIND=1`. |
 | `PORT` | `8080` | Dashboard port. |
 | `POLL_INTERVAL_SECONDS` | `60` | How often to *look* for due work, not how often to fetch. |
-| `TEST_MODE` | `0` | Development only: record every check and let “Check now” ignore cadence. |
+| `TEST_MODE` | `0` | Development only: record every check and send a summary after each manual Check now. |
 | `LOG_LEVEL` | `INFO` | Standard logging level. |
 | `LAN_BIND_IP` | `127.0.0.1` | Compose only: the LAN address to publish on. |
 | `DATA_DIR` | `./data` | Compose only: host folder mounted at `/data`. |
@@ -349,8 +352,12 @@ While it is on:
 
 - every poll writes an observation, even when the price has not changed, so the
   chart gets a point per check instead of one per change or per day;
-- **Check now** fetches every watched bucket immediately, ignoring the 6-hour
-  and 24-hour cadence. Scheduled polls still honour it.
+- a manual **Check now** also sends a compact test message, so you can verify
+  Telegram without waiting for a price move.
+
+Check now itself always forces that track's fetch, in normal mode too; test mode
+only changes what is recorded and whether that extra message is sent. Scheduled
+polls keep their cadence.
 
 It is off by default. Expect roughly four times the normal Spanish-market row
 count at 6-hourly polling. The extra rows are ordinary heartbeats: alerts
@@ -371,6 +378,10 @@ A line appears when, for an **active** track, on the **Spanish** market, for a
   direction, or
 - the price sets a new all-time low for that arrival, even below the threshold,
 - or availability flips (sold out ↔ back available).
+
+The first successful check of a new track sends one baseline message instead:
+how many arrivals are priced, how many are sold out, and the cheapest current
+arrival. It is not a price change and ignores `min_delta`.
 
 `min_delta` is per track and editable.
 
@@ -398,8 +409,9 @@ Failure alerts are separate and immediate:
 | unrecognised response shape | immediately, throttled to once per 6 h |
 | missing ticket product code | the ticket line is disabled, never the package prices |
 
-Telegram send failures cannot be alerted over Telegram; they are logged and
-increment the `telegram` row on the health page.
+Telegram send failures cannot be alerted over Telegram; they are recorded on
+the health page with the API's own error, and the **Send test message** button
+reports each chat's result.
 
 **Silence is only allowed to mean "nothing moved".** If the tracker cannot see,
 it says so, and the dashboard header says "last successful check: N hours ago".
@@ -412,7 +424,9 @@ it says so, and the dashboard header says "last successful check: N hours ago".
   Archived tracks sit in a collapsed section below.
 - **Track** — per-hotel cheapest available arrival, all-time low, last seen, the
   alert toggle, and a strip of facts (markets, threshold, changes in the last
-  24 h). Window trim/extend, check-now, stop, archive and delete live here.
+  24 h). Window trim/extend, Check now, stop, archive and delete live here.
+  **Check now** forces this track's fetch regardless of cadence, with a
+  60-second cooldown.
 - **Hotel** — price history opens **by check-in date**, with the cheapest
   current date in the summary and #1/#2/#3 badges on the three cheapest
   arrivals. **Over time** is the alternative: x is when the price was checked,
@@ -420,7 +434,9 @@ it says so, and the dashboard header says "last successful check: N hours ago".
   7 day / 30 day / all selector. Below it: package, previous, all-time low,
   tickets, implied hotel cost, and when each arrival was last seen.
 - **Health** — per-source last success, consecutive failures, last error, recent
-  failures and recent requests.
+  failures and recent requests. The Telegram panel shows whether it is
+  configured, the masked chat ids, the last API error, and a **Send test
+  message** button.
 
 Trimmed arrivals are hidden from the chart but their observations are untouched,
 so extending the window again restores the lines exactly as they were.

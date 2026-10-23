@@ -20,8 +20,9 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app import config
+from app.alerts import telegram as telegram_module
 from app.dlp import hotels as hotel_catalog
-from app.tracking import tracks
+from app.tracking import health, tracks
 from app.web import queries
 
 
@@ -288,7 +289,13 @@ def build_router(*, require_user) -> APIRouter:
         row = require_track(request, track_id)
         if row["archived_at"] is not None:
             raise HTTPException(status_code=409, detail="track is archived")
-        request.app.state.check_now()
+        started = request.app.state.check_now(track_id)
+        if not started:
+            return RedirectResponse(
+                url=f"/tracks/{track_id}?msg=Not+started.+A+check+is+already+running+"
+                "or+this+track+was+checked+in+the+last+minute.",
+                status_code=303,
+            )
         return RedirectResponse(
             url=f"/tracks/{track_id}?msg=Check+started.+Refresh+in+a+minute.", status_code=303
         )
@@ -337,14 +344,71 @@ def build_router(*, require_user) -> APIRouter:
     @router.get("/health", response_class=HTMLResponse)
     async def health_page(request: Request) -> HTMLResponse:
         conn = request.app.state.conn
+        rows = queries.health(conn)
+        settings = telegram_module.settings_from_env()
+        telegram_row = next(
+            (row for row in rows if row["source"] == "telegram"), None
+        )
         return render(
             request,
             "health.html",
-            health=queries.health(conn),
+            health=rows,
             failures=queries.recent_failures(conn),
             polls=queries.recent_polls(conn),
             age=queries.age_of_last_success(conn),
             last_success=queries.last_success(conn),
+            telegram_configured=settings.configured,
+            telegram_chats=tuple(
+                telegram_module.mask_chat(chat) for chat in settings.chats
+            ),
+            telegram_missing=settings.missing,
+            telegram_row=telegram_row,
+        )
+
+    @router.post("/health/telegram/test")
+    async def telegram_test(
+        request: Request, csrf: str = Form("")
+    ) -> RedirectResponse:
+        check_csrf(request, csrf)
+        sender = request.app.state.telegram
+        if sender is None:
+            return RedirectResponse(
+                url="/health?err=Telegram+is+not+configured", status_code=303
+            )
+
+        now = datetime.now(timezone.utc)
+        try:
+            deliveries = await sender.deliver(
+                f"parkhotelchecker test — {now:%d %b %H:%M}"
+            )
+        except Exception as exc:  # noqa: BLE001 - report, do not 500
+            health.record_failure(
+                request.app.state.conn, "telegram", f"test send: {exc}", now=now
+            )
+            return RedirectResponse(
+                url=f"/health?err={_quote('Telegram test failed: ' + str(exc))}",
+                status_code=303,
+            )
+
+        ok = bool(deliveries) and all(delivery.ok for delivery in deliveries)
+        if ok:
+            health.record_success(request.app.state.conn, "telegram", now=now)
+            message = f"Telegram test: {len(deliveries)}/{len(deliveries)} delivered."
+        else:
+            failures = [delivery for delivery in deliveries if not delivery.ok]
+            detail = "; ".join(
+                f"{telegram_module.mask_chat(delivery.chat_id)}: "
+                f"{delivery.detail or ('HTTP ' + str(delivery.status) if delivery.status else 'send failed')}"
+                for delivery in failures
+            ) or "send failed"
+            health.record_failure(
+                request.app.state.conn, "telegram", detail, now=now
+            )
+            delivered = len(deliveries) - len(failures)
+            message = f"Telegram test: {delivered}/{len(deliveries)} delivered. {detail}"
+
+        return RedirectResponse(
+            url=f"/health?msg={_quote(message)}", status_code=303
         )
 
     @public.get("/healthz")

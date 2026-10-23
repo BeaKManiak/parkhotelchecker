@@ -21,6 +21,7 @@ import asyncio
 import hashlib
 import hmac
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -31,6 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import config
+from app.alerts.summary import ensure_backfill
 from app.web import auth
 from app.web.routes import build_router
 
@@ -140,6 +142,7 @@ def create_app(
     user: str | None = None,
     password_hash: str | None = None,
     test_mode: bool = False,
+    telegram=None,
 ) -> FastAPI:
     if user is None or password_hash is None:
         env_user, env_hash = auth.settings_from_env()
@@ -166,6 +169,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         stop = asyncio.Event()
         app.state.stop_event = stop
+        ensure_backfill(conn)
         task = None
         if scheduler is not None:
             task = asyncio.create_task(scheduler.run(stop=stop), name="scheduler")
@@ -192,26 +196,36 @@ def create_app(
     app.state.templates = templates
     app.state.csrf_token = csrf_token
     app.state.tasks = set()
+    app.state.telegram = telegram
 
     if check_now is None:
+        last_manual: dict[int, float] = {}
 
-        def check_now() -> None:  # noqa: F811 - the injected one wins
+        def check_now(track_id: int) -> bool:  # noqa: F811 - the injected one wins
             if scheduler is None:
                 log.info("check-now ignored: no scheduler attached")
-                return
+                return False
             if any(not task.done() for task in app.state.tasks):
                 log.info("check-now ignored: a manual check is already running")
-                return
+                return False
+            now = time.monotonic()
+            if now - last_manual.get(track_id, 0.0) < 60:
+                log.info("check-now ignored: track %s was checked less than a minute ago", track_id)
+                return False
+            last_manual[track_id] = now
 
             async def runner() -> None:
                 try:
-                    await scheduler.run_once(force=test_mode)
+                    await scheduler.run_once(
+                        force=True, track_id=track_id, announce_test=test_mode
+                    )
                 except Exception:  # noqa: BLE001 - a manual check must not 500
                     log.exception("manual check failed")
 
             task = asyncio.create_task(runner(), name="manual-check")
             app.state.tasks.add(task)
             task.add_done_callback(app.state.tasks.discard)
+            return True
 
     app.state.check_now = check_now
 

@@ -125,6 +125,15 @@ def test_jitter_is_deterministic_and_bounded() -> None:
     assert len(spread) > 10, "jitter should actually spread buckets apart"
 
 
+def test_a_forced_plan_can_be_limited_to_one_track(conn: sqlite3.Connection) -> None:
+    first = make_track(conn, name="first", hotels=(("DCHH", True),))
+    make_track(conn, name="second", hotels=(("DSFH", True),))
+
+    plan = planner.build_plan(conn, force=True, track_id=first)
+
+    assert {task.hotel for task in plan.packages} == {"DCHH"}
+
+
 def test_archived_tracks_are_not_planned(conn: sqlite3.Connection) -> None:
     track_id = make_track(conn)
     assert planner.build_plan(conn).packages

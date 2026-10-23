@@ -12,8 +12,14 @@ import pytest
 from app import db
 from app.alerts import telegram as telegram_module
 from app.alerts.notifier import Notifier
-from app.alerts.telegram import Telegram, from_env
-from app.tracking import tracks
+from app.alerts.telegram import (
+    Delivery,
+    Telegram,
+    from_env,
+    mask_chat,
+    settings_from_env,
+)
+from app.tracking import health, tracks
 from app.tracking.poller import PollResult
 from app.tracking.store import Written, utcnow
 
@@ -70,6 +76,38 @@ async def test_a_rejected_message_is_not_retried(monkeypatch) -> None:
     assert attempts["n"] == 1, "a 4xx will not improve by repeating it"
 
 
+async def test_delivery_reports_telegrams_own_description(monkeypatch) -> None:
+    monkeypatch.setattr(telegram_module, "BACKOFF_SECONDS", (0.0, 0.0))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400, json={"ok": False, "description": "Bad Request: chat not found"}
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        results = await Telegram("token", ["1234"], client).deliver("x")
+
+    assert len(results) == 1
+    assert results[0].ok is False
+    assert results[0].status == 400
+    assert results[0].detail == "Bad Request: chat not found"
+
+
+def test_chat_ids_are_masked() -> None:
+    assert mask_chat("-100123456789") == "…6789"
+    assert mask_chat("123") == "…"
+
+
+def test_settings_report_what_is_missing(monkeypatch) -> None:
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.setenv("TELEGRAM_CHAT_IDS", " 1, 2 ")
+    settings = settings_from_env()
+
+    assert settings.configured is False
+    assert settings.chats == ("1", "2")
+    assert settings.missing == ("TELEGRAM_BOT_TOKEN",)
+
+
 async def test_missing_configuration_disables_alerts(monkeypatch) -> None:
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_IDS", raising=False)
@@ -91,9 +129,12 @@ class FakeTelegram:
         self.ok = ok
         self.messages: list[str] = []
 
-    async def send(self, text: str) -> bool:
+    async def deliver(self, text: str) -> list[Delivery]:
         self.messages.append(text)
-        return self.ok
+        return [
+            Delivery("test", self.ok, 200 if self.ok else 400,
+                     None if self.ok else "bad chat")
+        ]
 
 
 def seed_change(conn: sqlite3.Connection) -> PollResult:
@@ -152,6 +193,7 @@ async def test_a_failed_send_is_recorded_not_raised(conn: sqlite3.Connection) ->
     assert sent == []
     row = conn.execute("SELECT * FROM health WHERE source = 'telegram'").fetchone()
     assert row["consecutive_failures"] == 1
+    assert "bad chat" in row["last_error"]
 
 
 async def test_a_poll_with_nothing_to_say_sends_nothing(conn: sqlite3.Connection) -> None:
@@ -159,6 +201,17 @@ async def test_a_poll_with_nothing_to_say_sends_nothing(conn: sqlite3.Connection
     sent = await Notifier(conn, telegram).on_poll(PollResult(), now=utcnow())
     assert sent == []
     assert telegram.messages == []
+
+
+def test_a_success_clears_the_previous_telegram_error(
+    conn: sqlite3.Connection,
+) -> None:
+    health.record_failure(conn, "telegram", "chat not found")
+    health.record_success(conn, "telegram")
+
+    row = conn.execute("SELECT * FROM health WHERE source = 'telegram'").fetchone()
+    assert row["consecutive_failures"] == 0
+    assert row["last_error"] is None
 
 
 async def test_without_telegram_the_notifier_still_works(conn: sqlite3.Connection) -> None:

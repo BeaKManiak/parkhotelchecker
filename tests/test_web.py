@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import db
+from app.alerts.telegram import Delivery
 from app.dlp import hotels as hotel_catalog
 from app.tracking import tracks
 from app.web import auth
@@ -80,10 +81,12 @@ def csrf_from(html: str) -> str:
 def app_and_conn():
     conn = db.connect(":memory:")
     auth._failures.clear()
-    calls = {"check_now": 0}
+    calls = {"check_now": 0, "track_id": None}
 
-    def check_now() -> None:
+    def check_now(track_id: int) -> bool:
         calls["check_now"] += 1
+        calls["track_id"] = track_id
+        return True
 
     app = create_app(
         conn=conn, user=AUTH[0], password_hash=PASSWORD_HASH, check_now=check_now
@@ -653,6 +656,92 @@ def test_check_now_calls_the_injected_scheduler(client) -> None:
     )
 
     assert calls["check_now"] == 1
+    assert calls["track_id"] == track_id
+
+
+class FakeSender:
+    def __init__(self, ok: bool = True) -> None:
+        self.ok = ok
+        self.messages: list[str] = []
+
+    async def deliver(self, text: str) -> list[Delivery]:
+        self.messages.append(text)
+        return [
+            Delivery(
+                "-100123456789",
+                self.ok,
+                200 if self.ok else 400,
+                None if self.ok else "Bad Request: chat not found",
+            )
+        ]
+
+
+def test_the_health_page_can_send_a_telegram_test(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_CHAT_IDS", "-100123456789")
+    conn = db.connect(":memory:")
+    sender = FakeSender()
+    app = create_app(
+        conn=conn,
+        user=AUTH[0],
+        password_hash=PASSWORD_HASH,
+        check_now=lambda track_id: True,
+        telegram=sender,
+    )
+    with TestClient(app) as http:
+        page = http.get("/health", auth=AUTH)
+        assert "Send test message" in page.text
+        assert "…6789" in page.text
+        token = csrf_from(page.text)
+        response = http.post(
+            "/health/telegram/test",
+            auth=AUTH,
+            data={"csrf": token},
+            follow_redirects=False,
+        )
+    assert response.status_code == 303
+    assert sender.messages
+    row = conn.execute("SELECT * FROM health WHERE source = 'telegram'").fetchone()
+    assert row["consecutive_failures"] == 0
+    conn.close()
+
+
+def test_a_rejected_telegram_test_shows_the_chat_error(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_CHAT_IDS", "-100123456789")
+    conn = db.connect(":memory:")
+    sender = FakeSender(ok=False)
+    app = create_app(
+        conn=conn,
+        user=AUTH[0],
+        password_hash=PASSWORD_HASH,
+        check_now=lambda track_id: True,
+        telegram=sender,
+    )
+    with TestClient(app) as http:
+        page = http.get("/health", auth=AUTH)
+        token = csrf_from(page.text)
+        response = http.post(
+            "/health/telegram/test",
+            auth=AUTH,
+            data={"csrf": token},
+            follow_redirects=False,
+        )
+    assert response.status_code == 303
+    row = conn.execute("SELECT * FROM health WHERE source = 'telegram'").fetchone()
+    assert row["consecutive_failures"] == 1
+    assert "chat not found" in row["last_error"]
+    conn.close()
+
+
+def test_health_says_when_telegram_is_not_configured(client, monkeypatch) -> None:
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_IDS", raising=False)
+    http, _, _ = client
+    response = http.get("/health", auth=AUTH)
+
+    assert "Telegram is not configured" in response.text
+    assert "TELEGRAM_BOT_TOKEN" in response.text
 
 
 def test_health_page_reports_last_success(client) -> None:

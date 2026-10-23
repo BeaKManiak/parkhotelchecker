@@ -45,7 +45,12 @@ class Scheduler:
         self._record_all = record_all
 
     async def run_once(
-        self, *, now: datetime | None = None, force: bool = False
+        self,
+        *,
+        now: datetime | None = None,
+        force: bool = False,
+        track_id: int | None = None,
+        announce_test: bool = False,
     ) -> PollResult:
         now = now or datetime.now(timezone.utc)
 
@@ -57,7 +62,9 @@ class Scheduler:
                 log.exception("backup failed")
 
         try:
-            plan = planner.build_plan(self._conn, now=now, force=force)
+            plan = planner.build_plan(
+                self._conn, now=now, force=force, track_id=track_id
+            )
         except Exception as exc:  # a planner bug must not kill the loop
             log.exception("planner failed")
             health.record_failure(
@@ -92,14 +99,28 @@ class Scheduler:
             await self._notify(result, now)
             return result
 
-        await self._notify(result, now)
+        await self._notify(
+            result, now, track_id=track_id, announce_test=announce_test
+        )
         return result
 
-    async def _notify(self, result: PollResult, now: datetime) -> None:
+    async def _notify(
+        self,
+        result: PollResult,
+        now: datetime,
+        *,
+        track_id: int | None = None,
+        announce_test: bool = False,
+    ) -> None:
         if self._notifier is None:
             return
         try:
-            await self._notifier.on_poll(result, now=now)
+            await self._notifier.on_poll(
+                result,
+                now=now,
+                track_id=track_id,
+                announce_test=announce_test,
+            )
         except Exception:  # noqa: BLE001 - alerting must not stop the loop
             log.exception("notifier failed")
 

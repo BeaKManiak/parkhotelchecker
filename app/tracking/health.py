@@ -22,6 +22,8 @@ def record_success(
         VALUES (?, ?, NULL, NULL, 0)
         ON CONFLICT (source) DO UPDATE SET
           last_success_at = excluded.last_success_at,
+          last_error_at = NULL,
+          last_error = NULL,
           consecutive_failures = 0
         """,
         (source, iso_utc(now or utcnow())),

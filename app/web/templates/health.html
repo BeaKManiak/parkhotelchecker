@@ -20,6 +20,39 @@
 {% endif %}
 
 <section>
+  <h2>Telegram</h2>
+  {% if telegram_configured %}
+    <p>Configured for {{ telegram_chats|length }} chat{% if telegram_chats|length != 1 %}s{% endif %}:
+      {% for chat in telegram_chats %}<code>{{ chat }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    <form method="post" action="/health/telegram/test" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="ghost">Send test message</button>
+    </form>
+    <p class="hint">Sends one plain-text message through the same bot and chat ids as the
+      alerts. The token is never displayed.</p>
+  {% else %}
+    <p class="flash bad">Telegram is not configured. Missing:
+      {{ telegram_missing|join(', ') }}.</p>
+    <p class="hint">Set the missing values in <code>.env</code>, then recreate the container
+      with <code>docker compose up -d</code>.</p>
+  {% endif %}
+
+  {% if telegram_row %}
+    <p class="small">
+      Last success: <strong>{{ telegram_row.last_success_at|local if telegram_row.last_success_at else 'never' }}</strong>
+      · consecutive failures: <strong>{{ telegram_row.consecutive_failures }}</strong>
+      {% if telegram_row.last_error %}
+        <br><span class="muted">{{ telegram_row.last_error_at|local }}</span>
+        <span class="mono">{{ telegram_row.last_error }}</span>
+      {% endif %}
+    </p>
+  {% else %}
+    <p class="muted small">No Telegram attempt recorded yet. Send a test message to check
+      the token and chat ids.</p>
+  {% endif %}
+</section>
+
+<section>
   <h2>Sources</h2>
   <div class="table-wrap">
     <table>
