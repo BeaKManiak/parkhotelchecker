@@ -63,6 +63,113 @@
 </section>
 
 <section>
+  <h2>Markets</h2>
+  {% if not comparison_view.has_comparison_markets %}
+  <p class="muted">No comparison markets on this track.
+    <a href="/tracks/{{ track.id }}">Add them on the track page.</a></p>
+  {% else %}
+  <p class="hint">
+    {% if comparison_view.differing %}
+      Showing {{ comparison_view.differing|length }} EUR market{% if comparison_view.differing|length != 1 %}s{% endif %}
+      that differ{% if comparison_view.differing|length == 1 %}s{% endif %} from {{ comparison_view.reference }}.
+    {% elif comparison_view.matched %}
+      All {{ comparison_view.matched|length }} other EUR market{% if comparison_view.matched|length != 1 %}s{% endif %}
+      match{% if comparison_view.matched|length == 1 %}es{% endif %} {{ comparison_view.reference }} on every priced arrival.
+    {% endif %}
+    {% if comparison_view.unpriced %}
+      No current prices yet: {{ comparison_view.unpriced|join(', ') }}.
+    {% endif %}
+    {% if not comparison_view.has_data %}
+      The 72-hour comparison checks have not produced prices yet.
+    {% endif %}
+  </p>
+
+  {% if comparison_view.has_data and comparison_view.columns|length > 1 %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Arrival</th>
+          {% for column in comparison_view.columns %}
+          <th class="num">{{ column.market }}<br>
+            <span class="muted small">{{ column.currency }}</span></th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in comparison %}
+        {% set ref_cell = row.cells.get(comparison_view.reference) %}
+        <tr>
+          <td class="nowrap">{{ row.arrival|day }}</td>
+          {% for column in comparison_view.columns %}
+          {% set cell = row.cells.get(column.market) %}
+          <td class="num">
+            {% if cell is none or not cell.observed %}
+              <span class="muted">not seen</span>
+            {% elif cell.price is none %}
+              <span class="muted">sold out</span>
+            {% else %}
+              {{ cell.price|money(cell.currency) }}
+              {% if column.status == 'differs' and ref_cell is not none
+                    and ref_cell.observed and ref_cell.price is not none
+                    and cell.price != ref_cell.price %}
+                <span class="small {{ 'up' if cell.price > ref_cell.price else 'down' }}">{{ cell.price|delta(ref_cell.price) }}</span>
+              {% endif %}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">Δ is against {{ comparison_view.reference }}; only same-currency
+    comparisons get one. Open the full matrix for sold-out and unseen cells in every
+    market.</p>
+  {% endif %}
+
+  {% if comparison_view.has_data and comparison_view.all_columns|length > comparison_view.columns|length %}
+  <details class="panel">
+    <summary>Show all markets ({{ comparison_view.all_columns|length }})</summary>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Arrival</th>
+            {% for column in comparison_view.all_columns %}
+            <th class="num">{{ column.market }}<br>
+              <span class="muted small">{{ column.currency }}</span></th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in comparison %}
+          <tr>
+            <td class="nowrap">{{ row.arrival|day }}</td>
+            {% for column in comparison_view.all_columns %}
+            {% set cell = row.cells.get(column.market) %}
+            <td class="num">
+              {% if cell is none or not cell.observed %}
+                <span class="muted">not seen</span>
+              {% elif cell.price is none %}
+                <span class="muted">sold out</span>
+              {% else %}
+                {{ cell.price|money(cell.currency) }}
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">Native currencies, no conversion and no delta.</p>
+  </details>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section>
   <h2>Arrivals</h2>
   <div class="table-wrap">
     <table>

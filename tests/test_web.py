@@ -579,6 +579,56 @@ def test_hotel_page_carries_the_chart_data(client) -> None:
     assert http.get(f"/tracks/{track_id}/hotels/DDLH", auth=AUTH).status_code == 404
 
 
+def test_the_comparison_view_collapses_matches_and_shows_differences(client) -> None:
+    http, conn, _ = client
+    track_id = new_track(conn)
+    tracks.add_markets(conn, track_id, ("fr-fr", "en-gb"))
+
+    def series_id(market: str) -> int:
+        return conn.execute(
+            """
+            SELECT s.id FROM series s
+            JOIN track_series ts ON ts.series_id = s.id AND ts.track_id = ?
+            WHERE s.hotel_code = 'DCHH' AND s.market = ?
+            ORDER BY s.arrival_date LIMIT 1
+            """,
+            (track_id, market),
+        ).fetchone()["id"]
+
+    def observe(market: str, cents: int, *, seconds: int = 0) -> None:
+        conn.execute(
+            """
+            INSERT INTO observation (series_id, price_cents, available, observed_at, kind)
+            VALUES (?, ?, 1, ?, 'first')
+            """,
+            (
+                series_id(market),
+                cents,
+                (
+                    datetime.now(timezone.utc) + timedelta(seconds=seconds)
+                ).isoformat(timespec="seconds"),
+            ),
+        )
+        conn.commit()
+
+    observe("es-es", 70000)
+    observe("fr-fr", 70000)
+    observe("en-gb", 60000)
+
+    page = http.get(f"/tracks/{track_id}/hotels/DCHH", auth=AUTH)
+    assert "All 1 other EUR market" in page.text
+    assert "matches es-es" in page.text
+    assert "£600.00" in page.text
+    assert "Show all markets (3)" in page.text
+
+    observe("fr-fr", 80000, seconds=1)
+
+    page = http.get(f"/tracks/{track_id}/hotels/DCHH", auth=AUTH)
+    assert "Showing 1 EUR market" in page.text
+    assert "that differs from es-es" in page.text
+    assert "+€100.00" in page.text
+
+
 def test_the_check_in_view_is_the_default_and_has_a_range_selector(client) -> None:
     http, conn, _ = client
     track_id = new_track(conn)

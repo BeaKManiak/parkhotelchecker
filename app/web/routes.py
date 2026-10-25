@@ -24,6 +24,7 @@ from app.alerts import telegram as telegram_module
 from app.dlp import hotels as hotel_catalog
 from app.tracking import health, tracks
 from app.web import queries
+from app.web.comparison import build as build_comparison
 
 
 def build_router(*, require_user) -> APIRouter:
@@ -374,6 +375,8 @@ def build_router(*, require_user) -> APIRouter:
             if rows
             else config.MARKET_CURRENCY.get(market, "EUR")
         )
+        comparison_rows = queries.comparison(conn, track_id, hotel_code)
+        comparison_view = build_comparison(comparison_rows, market_rows)
 
         priced = [r for r in rows if r.price is not None and r.available]
         ranked = sorted(priced, key=lambda r: (r.price, r.arrival))
@@ -398,7 +401,8 @@ def build_router(*, require_user) -> APIRouter:
                 ),
             ),
             currency=currency,
-            comparison=queries.comparison(conn, track_id, hotel_code),
+            comparison=comparison_rows,
+            comparison_view=comparison_view,
             ranks=ranks,
             cheapest_row=cheapest_row,
             low_row=low_row,

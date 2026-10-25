@@ -443,7 +443,9 @@ it says so, and the dashboard header says "last successful check: N hours ago".
   7 day / 30 day / all selector. Market chips switch the chart and arrivals
   table; prices and the chart stay in that market's currency. Below it:
   package, previous, all-time low, tickets, implied hotel cost, and when each
-  arrival was last seen.
+  arrival was last seen. The **Markets** table uses ES as the reference and
+  shows only EUR markets that differ; **Show all markets** opens the full
+  matrix. GBP/CHF are shown natively and never get a delta.
 - **Health** — per-source last success, consecutive failures, last error, recent
   failures and recent requests. The Telegram panel shows whether it is
   configured, the masked chat ids, the last API error, and a **Send test
