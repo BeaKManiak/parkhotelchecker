@@ -497,7 +497,13 @@ users than necessary.
 ./.venv/bin/pytest -q                 # offline, under a second
 ./.venv/bin/python scripts/live_probe.py packages --hotel DCHH --month 2027-01
 ./.venv/bin/python scripts/live_probe.py tickets  --month 2026-11 --child 2020-01-01
+./.venv/bin/python scripts/probe_markets.py --hotel DCHH --month 2027-02
 ```
+
+`probe_markets.py` asks every market for the same hotel-month and prints a
+table: expected currency, returned currency, sellable days, cheapest price.
+It is the check to run before adding a market to a comparison track. Use
+`--markets fr-fr,de-de,en-gb` to narrow it.
 
 The live probe is manual and read-only. It exists because the tests cannot tell
 you that Disneyland changed a payload; it can. It is never run automatically.

@@ -33,7 +33,9 @@ def month_start(offset_days: int = 40) -> date:
 
 
 def make_track(conn: sqlite3.Connection, *, hotels=(("DCHH", True),), start_day=None, days=2) -> int:
-    start_day = start_day or (date.today() + timedelta(days=40))
+    # Keep the arrivals on the first days of the task month: calendar_for()
+    # always returns those, so the test does not depend on today's day.
+    start_day = start_day or month_start()
     return tracks.create_track(
         conn,
         tracks.TrackSpec(
