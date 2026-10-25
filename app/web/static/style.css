@@ -197,6 +197,8 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
 .facts .k { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .facts .v { display: block; font-size: 16px; font-weight: 550; margin-top: 2px; }
 
+.market-switch { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 10px 0 16px; }
+.market-switch .chip { text-decoration: none; }
 .chart-controls { display: flex; gap: 8px; margin: 2px 0 12px; flex-wrap: wrap; align-items: center; }
 .chart-controls button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .chart-range {

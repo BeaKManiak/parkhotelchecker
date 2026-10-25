@@ -440,8 +440,10 @@ it says so, and the dashboard header says "last successful check: N hours ago".
   current date in the summary and #1/#2/#3 badges on the three cheapest
   arrivals. **Over time** is the alternative: x is when the price was checked,
   one stepped line per arrival date (the 12 cheapest, with history), with a
-  7 day / 30 day / all selector. Below it: package, previous, all-time low,
-  tickets, implied hotel cost, and when each arrival was last seen.
+  7 day / 30 day / all selector. Market chips switch the chart and arrivals
+  table; prices and the chart stay in that market's currency. Below it:
+  package, previous, all-time low, tickets, implied hotel cost, and when each
+  arrival was last seen.
 - **Health** — per-source last success, consecutive failures, last error, recent
   failures and recent requests. The Telegram panel shows whether it is
   configured, the masked chat ids, the last API error, and a **Send test

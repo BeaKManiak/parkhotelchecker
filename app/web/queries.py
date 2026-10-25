@@ -59,6 +59,25 @@ class SeriesRow:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketCell:
+    market: str
+    currency: str
+    price: Decimal | None
+    observed: bool
+    observed_at: datetime | None
+
+    @property
+    def sold_out(self) -> bool:
+        return self.observed and self.price is None
+
+
+@dataclass(frozen=True, slots=True)
+class ComparisonRow:
+    arrival: date
+    cells: dict[str, MarketCell]
+
+
+@dataclass(frozen=True, slots=True)
 class TrackRow:
     id: int
     name: str
@@ -247,6 +266,48 @@ def series(conn: sqlite3.Connection, track_id: int, hotel_code: str, market: str
             )
         )
     return rows
+
+
+def comparison(
+    conn: sqlite3.Connection, track_id: int, hotel_code: str
+) -> list[ComparisonRow]:
+    """Latest price for every watched market, grouped by arrival date.
+
+    The cell is present even when the date has never been seen in that market;
+    the template decides how to render unseen, sold out and priced.
+    """
+    rows = conn.execute(
+        """
+        SELECT s.market, s.arrival_date, s.currency,
+               o.price_cents, o.available, o.observed_at
+        FROM series s
+        JOIN track_series ts
+          ON ts.series_id = s.id AND ts.track_id = ? AND ts.watched = 1
+        LEFT JOIN observation o ON o.id = (
+          SELECT x.id FROM observation x WHERE x.series_id = s.id
+          ORDER BY x.observed_at DESC, x.id DESC LIMIT 1
+        )
+        WHERE s.hotel_code = ?
+        ORDER BY s.arrival_date, s.market
+        """,
+        (track_id, hotel_code),
+    ).fetchall()
+
+    by_arrival: dict[date, dict[str, MarketCell]] = {}
+    for row in rows:
+        arrival = date.fromisoformat(row["arrival_date"])
+        observed_at = _dt(row["observed_at"])
+        by_arrival.setdefault(arrival, {})[row["market"]] = MarketCell(
+            market=row["market"],
+            currency=row["currency"],
+            price=from_cents(row["price_cents"]),
+            observed=observed_at is not None,
+            observed_at=observed_at,
+        )
+    return [
+        ComparisonRow(arrival=arrival, cells=cells)
+        for arrival, cells in sorted(by_arrival.items())
+    ]
 
 
 def _history(conn: sqlite3.Connection, series_id: int) -> tuple[tuple[datetime, Decimal], ...]:

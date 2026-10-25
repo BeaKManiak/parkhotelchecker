@@ -516,6 +516,49 @@ def test_unknown_track_is_a_404(client) -> None:
     assert http.get("/tracks/999", auth=AUTH).status_code == 404
 
 
+def test_the_hotel_page_can_switch_market_and_currency(client) -> None:
+    http, conn, _ = client
+    track_id = new_track(conn)
+    tracks.add_markets(conn, track_id, ("en-gb",))
+    series_id = conn.execute(
+        """
+        SELECT s.id FROM series s
+        JOIN track_series ts ON ts.series_id = s.id AND ts.track_id = ?
+        WHERE s.hotel_code = 'DCHH' AND s.market = 'en-gb'
+        ORDER BY s.arrival_date LIMIT 1
+        """,
+        (track_id,),
+    ).fetchone()["id"]
+    conn.execute(
+        """
+        INSERT INTO observation (series_id, price_cents, available, observed_at, kind)
+        VALUES (?, 65000, 1, ?, 'first')
+        """,
+        (series_id, datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    )
+    conn.commit()
+
+    response = http.get(
+        f"/tracks/{track_id}/hotels/DCHH?market=en-gb", auth=AUTH
+    )
+
+    assert response.status_code == 200
+    assert "prices in GBP" in response.text
+    assert "£650.00" in response.text
+    assert "?market=es-es" in response.text
+    match = re.search(r"data-chart='([^']+)'", response.text)
+    chart = json.loads(match.group(1))
+    assert chart["currency"] == "GBP"
+
+    default = http.get(f"/tracks/{track_id}/hotels/DCHH", auth=AUTH)
+    assert "prices in EUR" in default.text
+
+    unknown = http.get(
+        f"/tracks/{track_id}/hotels/DCHH?market=xx-xx", auth=AUTH
+    )
+    assert unknown.status_code == 400
+
+
 def test_hotel_page_carries_the_chart_data(client) -> None:
     http, conn, _ = client
     track_id = new_track(conn)

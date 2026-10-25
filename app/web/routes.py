@@ -346,7 +346,10 @@ def build_router(*, require_user) -> APIRouter:
 
     @router.get("/tracks/{track_id}/hotels/{hotel_code}", response_class=HTMLResponse)
     async def hotel_detail(
-        request: Request, track_id: int, hotel_code: str
+        request: Request,
+        track_id: int,
+        hotel_code: str,
+        market: str | None = None,
     ) -> HTMLResponse:
         conn = request.app.state.conn
         row = require_track(request, track_id)
@@ -357,9 +360,20 @@ def build_router(*, require_user) -> APIRouter:
         if not watched:
             raise HTTPException(status_code=404, detail="hotel not tracked")
 
-        market = queries.primary_market(conn, track_id)
+        market_rows = queries.markets(conn, track_id)
+        watched_markets = {entry["market"] for entry in market_rows}
+        if market is None:
+            market = queries.primary_market(conn, track_id)
+        elif market not in watched_markets:
+            raise HTTPException(status_code=400, detail="market not tracked")
+
         rows = queries.series(conn, track_id, hotel_code, market)
         chart = _chart_payload(rows)
+        currency = (
+            rows[0].currency
+            if rows
+            else config.MARKET_CURRENCY.get(market, "EUR")
+        )
 
         priced = [r for r in rows if r.price is not None and r.available]
         ranked = sorted(priced, key=lambda r: (r.price, r.arrival))
@@ -376,6 +390,15 @@ def build_router(*, require_user) -> APIRouter:
             series=rows,
             chart=chart,
             market=market,
+            markets=sorted(
+                market_rows,
+                key=lambda entry: (
+                    entry["market"] != config.PRIMARY_MARKET,
+                    entry["market"],
+                ),
+            ),
+            currency=currency,
+            comparison=queries.comparison(conn, track_id, hotel_code),
             ranks=ranks,
             cheapest_row=cheapest_row,
             low_row=low_row,
@@ -524,4 +547,5 @@ def _chart_payload(rows: list[queries.SeriesRow], limit: int = 12) -> dict:
         "checks": len(checks),
         "skipped": len(with_history) - len(chosen),
         "as_of": as_of.isoformat() if as_of else None,
+        "currency": rows[0].currency if rows else None,
     }

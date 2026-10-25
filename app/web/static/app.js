@@ -24,8 +24,11 @@
     }
   }
 
-  function money(value) {
-    return "€" + value.toLocaleString(undefined, {
+  var SYMBOLS = { EUR: "€", GBP: "£", USD: "$", CHF: "CHF ", DKK: "DKK " };
+
+  function money(value, currency) {
+    var symbol = SYMBOLS[currency] || (currency ? currency + " " : "€");
+    return symbol + value.toLocaleString(undefined, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
@@ -80,6 +83,7 @@
     var datasets = [];
     var xs = [];
     var cutoff = null;
+    var currency = data.currency || "EUR";
 
     if (!snapshot && rangeDays) {
       var latest = -Infinity;
@@ -198,7 +202,7 @@
             title: { display: true, text: "Package price" },
             ticks: {
               callback: function (value) {
-                return money(value);
+                return money(value, currency);
               }
             }
           }
@@ -224,8 +228,8 @@
               },
               label: function (item) {
                 return snapshot
-                  ? money(item.parsed.y)
-                  : item.dataset.label + ": " + money(item.parsed.y);
+                  ? money(item.parsed.y, currency)
+                  : item.dataset.label + ": " + money(item.parsed.y, currency);
               }
             }
           }

@@ -7,8 +7,18 @@
 
 <h1>{{ hotel.name }}</h1>
 <p class="muted">
-  {{ track.los|los }} · {{ market }} · prices in EUR, ticket priced separately
+  {{ track.los|los }} · {{ market }} · prices in {{ currency }}, ticket priced separately
 </p>
+
+{% if markets|length > 1 %}
+<div class="market-switch">
+  <span class="muted small">Market</span>
+  {% for entry in markets %}
+  <a class="chip {{ 'on' if entry.market == market }}"
+     href="/tracks/{{ track.id }}/hotels/{{ hotel.code }}?market={{ entry.market }}">{{ entry.market }}</a>
+  {% endfor %}
+</div>
+{% endif %}
 
 <div class="facts">
   <div><span class="k">Cheapest now</span>
