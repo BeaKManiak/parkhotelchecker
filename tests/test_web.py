@@ -16,7 +16,7 @@ import bcrypt
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db
+from app import config, db
 from app.alerts.telegram import Delivery
 from app.dlp import hotels as hotel_catalog
 from app.tracking import tracks
@@ -183,6 +183,8 @@ def test_the_new_track_form_explains_the_party_and_check_in_window(client) -> No
     assert "Disney hotels (on-site)" in text
     assert "Partner hotels" in text
     assert 'data-check-all="shortlist"' in text
+    assert re.search(r'name="compare_eur"[^>]*checked', text)
+    assert "Other EUR markets" in text
     # The shortlist starts empty; all hotels are tracked regardless.
     assert re.search(r'name="shortlist"[^>]*checked', text) is None
 
@@ -308,13 +310,103 @@ def test_creating_a_track_redirects_to_it(client) -> None:
     assert row["los"] == "3n_4j"
     assert row["min_delta_cents"] == 2500
 
-    markets = {r["market"] for r in conn.execute("SELECT market FROM track_market")}
-    assert markets == {"es-es", "en-gb"}
+    markets = {
+        r["market"]: r["cadence_hours"]
+        for r in conn.execute("SELECT market, cadence_hours FROM track_market")
+    }
+    assert markets == {"es-es": 6, "en-gb": 72}
 
     tracked = {
         r["hotel_code"] for r in conn.execute("SELECT hotel_code FROM track_hotel")
     }
     assert tracked == {hotel.code for hotel in hotel_catalog.HOTELS}
+
+
+def test_creating_a_track_can_include_the_eur_comparison_set(client) -> None:
+    http, conn, _ = client
+    page = http.get("/tracks/new", auth=AUTH)
+    token = csrf_from(page.text)
+    start = date.today() + timedelta(days=40)
+
+    response = http.post(
+        "/tracks",
+        auth=AUTH,
+        data={
+            "csrf": token,
+            "name": "With comparison",
+            "adults": "2",
+            "children_count": "0",
+            "compare_eur": "1",
+            "los": "2n_3j",
+            "arrival_start": start.isoformat(),
+            "arrival_end": (start + timedelta(days=2)).isoformat(),
+            "min_delta": "20",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    markets = {
+        row["market"]: row["cadence_hours"]
+        for row in conn.execute("SELECT market, cadence_hours FROM track_market")
+    }
+    assert set(markets) == {"es-es", *config.COMPARISON_MARKETS}
+    assert markets["es-es"] == 6
+    assert all(
+        markets[market] == config.COMPARISON_CADENCE_HOURS
+        for market in config.COMPARISON_MARKETS
+    )
+
+
+def test_adding_comparison_markets_to_an_existing_track(client) -> None:
+    http, conn, _ = client
+    track_id = new_track(conn)
+    page = http.get(f"/tracks/{track_id}", auth=AUTH)
+    assert "Add comparison markets (72 h)" in page.text
+    token = csrf_from(page.text)
+
+    response = http.post(
+        f"/tracks/{track_id}/markets",
+        auth=AUTH,
+        data={"csrf": token},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    markets = {
+        row["market"]: row["cadence_hours"]
+        for row in conn.execute(
+            "SELECT market, cadence_hours FROM track_market WHERE track_id = ?",
+            (track_id,),
+        )
+    }
+    expected = {
+        "es-es",
+        *config.COMPARISON_MARKETS,
+        *config.CANARY_MARKETS,
+    }
+    assert set(markets) == expected
+    assert markets["es-es"] == 6
+    assert all(
+        markets[market] == 72
+        for market in (*config.COMPARISON_MARKETS, *config.CANARY_MARKETS)
+    )
+
+    watched = conn.execute(
+        "SELECT COUNT(*) AS n FROM track_series WHERE track_id = ? AND watched = 1",
+        (track_id,),
+    ).fetchone()["n"]
+    assert watched == 2 * 3 * len(expected)  # two hotels x three arrivals x markets
+
+    http.post(
+        f"/tracks/{track_id}/markets",
+        auth=AUTH,
+        data={"csrf": token},
+        follow_redirects=False,
+    )
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM track_market WHERE track_id = ?", (track_id,)
+    ).fetchone()["n"] == len(expected)
 
 
 def test_a_track_can_start_with_no_alerting_hotels(client) -> None:

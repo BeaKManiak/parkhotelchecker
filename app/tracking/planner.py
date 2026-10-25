@@ -161,6 +161,7 @@ def build_plan(
         ticket_params = (track_id,)
 
     tickets: dict[str, TicketTask] = {}
+    ticket_cadences: dict[str, int] = {}
     for track in conn.execute(
         f"""
         SELECT t.id, t.los, t.party_id, t.arrival_start, t.arrival_end, p.adults, p.child_birthdates
@@ -174,15 +175,16 @@ def build_plan(
         start = date.fromisoformat(track["arrival_start"])
         end = date.fromisoformat(track["arrival_end"])
         markets = [
-            row["market"]
+            (row["market"], int(row["cadence_hours"]))
             for row in conn.execute(
-                "SELECT market FROM track_market WHERE track_id = ?", (track["id"],)
+                "SELECT market, cadence_hours FROM track_market WHERE track_id = ?",
+                (track["id"],),
             )
         ]
         for month in _months_between(start, end):
             if not config.within_horizon(month, today):
                 continue
-            for market in markets:
+            for market, cadence in markets:
                 task = TicketTask(
                     market=market,
                     month=month,
@@ -192,6 +194,13 @@ def build_plan(
                     children=children,
                 )
                 tickets.setdefault(task.key, task)
+                # Tickets are at least daily (the floor), but a slow market's
+                # tickets must not keep polling daily after its packages stopped.
+                wanted = max(TICKET_CADENCE_HOURS, cadence)
+                previous = ticket_cadences.get(task.key)
+                ticket_cadences[task.key] = (
+                    wanted if previous is None else min(previous, wanted)
+                )
 
     due_packages = tuple(
         task
@@ -211,7 +220,7 @@ def build_plan(
         or _due(
             attempts.get(("tickets", task.key)),
             now=now,
-            cadence_hours=TICKET_CADENCE_HOURS,
+            cadence_hours=ticket_cadences[task.key],
             key=task.key,
         )
     )

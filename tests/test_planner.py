@@ -176,6 +176,27 @@ def test_trimmed_arrivals_do_not_keep_a_month_alive(conn: sqlite3.Connection) ->
     assert {t.month for t in planner.build_plan(conn).packages} == {next_month}
 
 
+def test_slow_markets_do_not_keep_daily_tickets(conn: sqlite3.Connection) -> None:
+    make_track(conn, markets=(("es-es", 6), ("fr-fr", 72)))
+    now = datetime.now(timezone.utc)
+
+    first = planner.build_plan(conn, now=now)
+    assert {task.market for task in first.tickets} == {"es-es", "fr-fr"}
+    for task in first.tickets:
+        conn.execute(
+            "INSERT INTO fetch_log (source, key, requested_at, ok) VALUES ('tickets', ?, ?, 1)",
+            (task.key, now.isoformat()),
+        )
+    conn.commit()
+
+    # ES tickets are daily; a 72 h market's tickets must wait three days.
+    at_25h = planner.build_plan(conn, now=now + timedelta(hours=25))
+    assert {task.market for task in at_25h.tickets} == {"es-es"}
+
+    at_73h = planner.build_plan(conn, now=now + timedelta(hours=73))
+    assert {task.market for task in at_73h.tickets} == {"es-es", "fr-fr"}
+
+
 def test_ticket_tasks_follow_the_los(conn: sqlite3.Connection) -> None:
     make_track(conn, days=2, child_birthdates=("2020-01-01",))
     plan = planner.build_plan(conn)

@@ -199,6 +199,77 @@ def _materialise(
                 )
 
 
+def add_markets(
+    conn: sqlite3.Connection,
+    track_id: int,
+    markets: tuple[str, ...],
+    *,
+    cadence_hours: int = config.COMPARISON_CADENCE_HOURS,
+) -> dict[str, int]:
+    """Add markets to an existing track without touching existing cadences."""
+    track = conn.execute("SELECT * FROM track WHERE id = ?", (track_id,)).fetchone()
+    if track is None:
+        raise ValueError(f"unknown track {track_id}")
+    if track["archived_at"] is not None:
+        raise ValueError("cannot edit an archived track")
+    if track["status"] != "active":
+        raise ValueError("cannot edit a stopped track")
+    if cadence_hours < 1:
+        raise ValueError("cadence_hours must be >= 1")
+
+    wanted = tuple(dict.fromkeys(markets))
+    if not wanted:
+        return {"added": 0, "already": 0}
+    for market in wanted:
+        if market not in config.MARKET_CURRENCY:
+            raise ValueError(f"unknown market {market!r}")
+        if market == config.PRIMARY_MARKET:
+            raise ValueError("the primary market is implicit")
+
+    existing = {
+        row["market"]
+        for row in conn.execute(
+            "SELECT market FROM track_market WHERE track_id = ?", (track_id,)
+        )
+    }
+    missing = [market for market in wanted if market not in existing]
+    if not missing:
+        return {"added": 0, "already": len(wanted)}
+
+    hotel_specs = tuple(
+        (row["hotel_code"], bool(row["shortlisted"]))
+        for row in conn.execute(
+            "SELECT hotel_code, shortlisted FROM track_hotel WHERE track_id = ?",
+            (track_id,),
+        )
+    )
+    arrivals = [
+        day
+        for day in arrival_dates(
+            date.fromisoformat(track["arrival_start"]),
+            date.fromisoformat(track["arrival_end"]),
+        )
+        if config.within_horizon(day)
+    ]
+
+    for market in missing:
+        conn.execute(
+            "INSERT INTO track_market (track_id, market, cadence_hours) VALUES (?, ?, ?)",
+            (track_id, market, cadence_hours),
+        )
+    _materialise(
+        conn,
+        track_id,
+        int(track["party_id"]),
+        track["los"],
+        hotel_specs,
+        tuple((market, cadence_hours) for market in missing),
+        arrivals,
+    )
+    conn.commit()
+    return {"added": len(missing), "already": len(wanted) - len(missing)}
+
+
 def set_arrival_window(
     conn: sqlite3.Connection,
     track_id: int,

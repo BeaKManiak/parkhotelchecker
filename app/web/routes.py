@@ -78,6 +78,7 @@ def build_router(*, require_user) -> APIRouter:
                 "arrival_end": (tomorrow + timedelta(days=6)).isoformat(),
                 "min_delta": "20",
                 "markets": ["es-es"],
+                "compare_eur": "1",
                 "shortlist": [],
                 "children": [""] * (config.MAX_PARTY - 1),
             },
@@ -98,6 +99,7 @@ def build_router(*, require_user) -> APIRouter:
         arrival_end: str = Form(""),
         min_delta: str = Form("20"),
         market: list[str] | None = Form(None),
+        compare_eur: str | None = Form(None),
         shortlist: list[str] | None = Form(None),
         child: list[str] | None = Form(None),
         children_count: int = Form(0),
@@ -109,9 +111,14 @@ def build_router(*, require_user) -> APIRouter:
 
         marked = {code: code in shortlist for code in hotel_catalog.BY_CODE}
         markets: list[tuple[str, int]] = [(config.PRIMARY_MARKET, 6)]
+        if compare_eur:
+            markets.extend(
+                (code, config.COMPARISON_CADENCE_HOURS)
+                for code in config.COMPARISON_MARKETS
+            )
         for canary in config.CANARY_MARKETS:
             if canary in (market or []):
-                markets.append((canary, 24))
+                markets.append((canary, config.COMPARISON_CADENCE_HOURS))
 
         try:
             if not 0 <= children_count <= config.MAX_PARTY - 1:
@@ -151,6 +158,7 @@ def build_router(*, require_user) -> APIRouter:
                     "arrival_end": arrival_end,
                     "min_delta": min_delta,
                     "markets": market or [],
+                    "compare_eur": compare_eur,
                     "shortlist": shortlist,
                     "children_count": children_count,
                     "children": list(children)[: config.MAX_PARTY - 1]
@@ -176,6 +184,13 @@ def build_router(*, require_user) -> APIRouter:
         party = conn.execute(
             "SELECT * FROM party WHERE id = ?", (row["party_id"],)
         ).fetchone()
+        markets = queries.markets(conn, track_id)
+        watched = {m["market"] for m in markets}
+        missing_markets = [
+            code
+            for code in (*config.COMPARISON_MARKETS, *config.CANARY_MARKETS)
+            if code not in watched
+        ]
 
         return render(
             request,
@@ -184,7 +199,8 @@ def build_router(*, require_user) -> APIRouter:
             party=party,
             party_children=json.loads(party["child_birthdates"]) if party else [],
             market=market,
-            markets=queries.markets(conn, track_id),
+            markets=markets,
+            missing_markets=missing_markets,
             hotels=queries.hotels(conn, track_id, market),
             alerts_24h=queries.track_alerts(
                 conn, track_id, datetime.now(timezone.utc) - timedelta(hours=24)
@@ -213,6 +229,32 @@ def build_router(*, require_user) -> APIRouter:
             )
         message = f"Window updated: {counts['added']} added, {counts['untrimmed']} restored"
         return RedirectResponse(url=f"/tracks/{track_id}?msg={_quote(message)}", status_code=303)
+
+    @router.post("/tracks/{track_id}/markets")
+    async def add_markets(
+        request: Request, track_id: int, csrf: str = Form("")
+    ) -> RedirectResponse:
+        check_csrf(request, csrf)
+        row = require_track(request, track_id)
+        if row["archived_at"] is not None:
+            raise HTTPException(status_code=409, detail="track is archived")
+        try:
+            counts = tracks.add_markets(
+                request.app.state.conn,
+                track_id,
+                (*config.COMPARISON_MARKETS, *config.CANARY_MARKETS),
+            )
+        except ValueError as exc:
+            return RedirectResponse(
+                url=f"/tracks/{track_id}?err={_quote(str(exc))}", status_code=303
+            )
+        if counts["added"]:
+            message = f"Added {counts['added']} comparison markets; the next check will fetch them."
+        else:
+            message = "All comparison markets are already added."
+        return RedirectResponse(
+            url=f"/tracks/{track_id}?msg={_quote(message)}", status_code=303
+        )
 
     @router.post("/tracks/{track_id}/shortlist")
     async def toggle_shortlist(

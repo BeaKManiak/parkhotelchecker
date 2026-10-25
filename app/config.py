@@ -54,6 +54,26 @@ MARKET_CURRENCY: dict[str, str] = {
 }
 
 PRIMARY_MARKET = "es-es"
+
+# The other EUR markets are compared with ES for market-specific offers. They
+# are polled slowly: if they are identical, the value is in noticing the day
+# they stop being identical, not in watching every 6 hours.
+COMPARISON_MARKETS = (
+    "fr-fr",
+    "it-it",
+    "de-de",
+    "nl-nl",
+    "pt-pt",
+    "en-ie",
+    "fr-be",
+    "nl-be",
+    "de-at",
+    "de-ch",
+)
+COMPARISON_CADENCE_HOURS = 72
+
+# Non-EUR markets are charted in their own currency but never compared with ES;
+# there is no FX source and converting would be a lie.
 CANARY_MARKETS = ("en-gb", "fr-ch")
 
 # --- Package shape ---------------------------------------------------------

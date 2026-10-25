@@ -15,7 +15,8 @@ Two people use it. That is the scale it is built for.
 ## What it does
 
 - Polls the Disneyland Paris package price calendar every 6 hours (±15 min
-  jitter) for the arrival dates you care about.
+  jitter) for the arrival dates you care about, and optionally the other EUR
+  markets every 72 hours.
 - Prices the park tickets separately, so it can show the package price, the
   ticket price, and the implied hotel-only cost for the same date.
 - Tracks all 16 hotels on the DLP site (7 on-site, 9 partner). You choose which
@@ -143,7 +144,8 @@ in:
 - the length of stay (default 2 nights, 3 park days);
 - which hotels are **shortlisted**. Shortlisting controls *who may alert you*;
   all 16 hotels are polled regardless, and none are selected by default;
-- optionally, canary markets. They are charted but never alerted;
+- optionally, the other EUR markets (checked every 72 hours) and/or the `en-gb`
+  and `fr-ch` canaries. Canaries are charted but never alerted;
 - the minimum change that deserves an alert (default €20). New all-time lows
   and sold-out / back-available flips alert regardless.
 
@@ -270,7 +272,14 @@ Everything comes from the environment. The container reads `.env`.
 
 `POLL_INTERVAL_SECONDS=60` does not mean a request every minute. The poller asks
 "what is due?" and fetches only buckets whose cadence has elapsed: 6 hours for
-the Spanish market, 24 hours for canaries, 24 hours for tickets.
+the Spanish market, 72 hours for comparison markets, and at least 24 hours for
+tickets (a slow market's tickets follow its market, so they do not keep polling
+daily).
+
+New tracks can include the other EUR markets from the start. Existing tracks
+get an **Add comparison markets** panel on the track page; it adds only the
+missing markets, leaves existing cadences alone, and the next check fetches them.
+The comparison screen itself is the next slice.
 
 ---
 

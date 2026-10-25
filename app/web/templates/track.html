@@ -44,6 +44,18 @@
   {% endif %}
 </div>
 
+{% if track.status == 'active' and not track.archived_at and missing_markets %}
+<details class="panel">
+  <summary>Add comparison markets (72 h)</summary>
+  <p>Adds {{ missing_markets|join(', ') }}. Existing markets keep their cadence; new
+    ones are checked every 72 hours. Prices stay native, with no FX conversion.</p>
+  <form method="post" action="/tracks/{{ track.id }}/markets">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ghost">Add missing markets</button>
+  </form>
+</details>
+{% endif %}
+
 {% if track.status == 'active' and not track.archived_at %}
 <details class="panel">
   <summary>Edit arrival window</summary>

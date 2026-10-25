@@ -187,6 +187,58 @@ def test_shortlist_can_be_toggled(conn: sqlite3.Connection) -> None:
     assert rows == {"DCHH": 1, "DSFH": 1}
 
 
+def test_adding_markets_materialises_only_the_new_ones(
+    conn: sqlite3.Connection,
+) -> None:
+    track_id = tracks.create_track(
+        conn, spec(markets=(("es-es", 6), ("en-gb", 24)))
+    )
+    assert series_count(conn, track_id) == 28  # 2 hotels x 7 arrivals x 2 markets
+
+    counts = tracks.add_markets(conn, track_id, ("en-gb", "fr-fr", "de-de"))
+
+    assert counts == {"added": 2, "already": 1}
+    rows = {
+        row["market"]: row["cadence_hours"]
+        for row in conn.execute(
+            "SELECT market, cadence_hours FROM track_market WHERE track_id = ?",
+            (track_id,),
+        )
+    }
+    assert rows["en-gb"] == 24, "an existing market keeps its cadence"
+    assert rows["fr-fr"] == 72
+    assert rows["de-de"] == 72
+    assert series_count(conn, track_id) == 56  # 2 hotels x 7 arrivals x 4 markets
+
+    again = tracks.add_markets(conn, track_id, ("en-gb", "fr-fr", "de-de"))
+    assert again == {"added": 0, "already": 3}
+    assert series_count(conn, track_id) == 56
+
+
+def test_adding_markets_refuses_archived_and_stopped_tracks(
+    conn: sqlite3.Connection,
+) -> None:
+    track_id = tracks.create_track(conn, spec())
+    tracks.archive_track(conn, track_id)
+    with pytest.raises(ValueError, match="archived"):
+        tracks.add_markets(conn, track_id, ("fr-fr",))
+
+    tracks.archive_track(conn, track_id, archived=False)
+    tracks.stop_track(conn, track_id)
+    with pytest.raises(ValueError, match="stopped"):
+        tracks.add_markets(conn, track_id, ("fr-fr",))
+
+
+def test_adding_markets_rejects_unknown_and_primary_markets(
+    conn: sqlite3.Connection,
+) -> None:
+    track_id = tracks.create_track(conn, spec())
+    with pytest.raises(ValueError, match="unknown market"):
+        tracks.add_markets(conn, track_id, ("xx-xx",))
+    with pytest.raises(ValueError, match="primary market"):
+        tracks.add_markets(conn, track_id, ("es-es",))
+
+
 def test_archiving_keeps_the_track_and_its_status(conn: sqlite3.Connection) -> None:
     track_id = tracks.create_track(conn, spec())
 

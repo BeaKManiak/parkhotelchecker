@@ -115,17 +115,23 @@
 
   <fieldset>
     <legend>Markets</legend>
-    <p class="hint">Prices come from the Spanish site, which is the one you book through.
-      Canaries are checked once a day to tell you if another market undercuts it.</p>
+    <p class="hint">Spain is the market you book through and is checked every 6 hours.
+      Comparison markets are checked every 72 hours to catch market-specific offers.
+      Prices stay in their own currency; nothing is converted.</p>
     <label class="check">
       <input type="checkbox" checked disabled>
       <span>Spain (es-es) — primary, every 6 hours</span>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="compare_eur" value="1"
+             {{ 'checked' if form.compare_eur }}>
+      <span>Other EUR markets — 10 markets, every 72 hours</span>
     </label>
     {% for canary in canaries %}
     <label class="check">
       <input type="checkbox" name="market" value="{{ canary }}"
              {{ 'checked' if canary in form.markets }}>
-      <span>{{ canary }} — canary, daily</span>
+      <span>{{ canary }} — chart only, every 72 hours</span>
     </label>
     {% endfor %}
   </fieldset>
