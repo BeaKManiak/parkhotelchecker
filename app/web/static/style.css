@@ -194,8 +194,30 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
   margin: 18px 0;
 }
 .facts > div { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.facts .fact-wide { grid-column: 1 / -1; }
 .facts .k { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .facts .v { display: block; font-size: 16px; font-weight: 550; margin-top: 2px; }
+.market-groups { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.market-group { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.market-group-label {
+  min-width: 88px;
+  padding-top: 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.market-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.market-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.market-pill small { color: var(--muted); }
 
 .market-switch { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 10px 0 16px; }
 .market-switch .chip { text-decoration: none; }

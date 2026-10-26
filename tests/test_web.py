@@ -408,6 +408,12 @@ def test_adding_comparison_markets_to_an_existing_track(client) -> None:
         "SELECT COUNT(*) AS n FROM track_market WHERE track_id = ?", (track_id,)
     ).fetchone()["n"] == len(expected)
 
+    page = http.get(f"/tracks/{track_id}", auth=AUTH)
+    assert "market-pill" in page.text
+    assert ">Primary<" in page.text
+    assert ">Comparison<" in page.text
+    assert ">Chart only<" in page.text
+
 
 def test_a_track_can_start_with_no_alerting_hotels(client) -> None:
     http, conn, _ = client
@@ -620,6 +626,11 @@ def test_the_comparison_view_collapses_matches_and_shows_differences(client) -> 
     assert "matches es-es" in page.text
     assert "£600.00" in page.text
     assert "Show all markets (3)" in page.text
+    assert page.text.index("<h2>Arrivals</h2>") < page.text.index("<h2>Markets</h2>")
+    markets_section = page.text.split("<h2>Markets</h2>")[1]
+    assert "#1" in markets_section
+    assert "EUR markets get one" in markets_section
+    assert "Ranks follow the selected market" in markets_section
 
     observe("fr-fr", 80000, seconds=1)
 

@@ -192,6 +192,31 @@ def build_router(*, require_user) -> APIRouter:
             for code in (*config.COMPARISON_MARKETS, *config.CANARY_MARKETS)
             if code not in watched
         ]
+        comparison = set(config.COMPARISON_MARKETS)
+        chart_only = set(config.CANARY_MARKETS)
+        market_groups = [
+            (
+                "Primary",
+                [m for m in markets if m["market"] == config.PRIMARY_MARKET],
+            ),
+            (
+                "Comparison",
+                [m for m in markets if m["market"] in comparison],
+            ),
+            (
+                "Chart only",
+                [m for m in markets if m["market"] in chart_only],
+            ),
+        ]
+        other_markets = [
+            m
+            for m in markets
+            if m["market"] != config.PRIMARY_MARKET
+            and m["market"] not in comparison
+            and m["market"] not in chart_only
+        ]
+        if other_markets:
+            market_groups.append(("Other", other_markets))
 
         return render(
             request,
@@ -201,6 +226,7 @@ def build_router(*, require_user) -> APIRouter:
             party_children=json.loads(party["child_birthdates"]) if party else [],
             market=market,
             markets=markets,
+            market_groups=market_groups,
             missing_markets=missing_markets,
             hotels=queries.hotels(conn, track_id, market),
             alerts_24h=queries.track_alerts(
@@ -381,6 +407,9 @@ def build_router(*, require_user) -> APIRouter:
         priced = [r for r in rows if r.price is not None and r.available]
         ranked = sorted(priced, key=lambda r: (r.price, r.arrival))
         ranks = {r.series_id: i for i, r in enumerate(ranked[:3], start=1)}
+        arrival_ranks = {
+            r.arrival: i for i, r in enumerate(ranked[:3], start=1)
+        }
         cheapest_row = ranked[0] if ranked else None
         lows = [r for r in rows if r.all_time_low is not None]
         low_row = min(lows, key=lambda r: (r.all_time_low, r.arrival)) if lows else None
@@ -404,6 +433,7 @@ def build_router(*, require_user) -> APIRouter:
             comparison=comparison_rows,
             comparison_view=comparison_view,
             ranks=ranks,
+            arrival_ranks=arrival_ranks,
             cheapest_row=cheapest_row,
             low_row=low_row,
         )
