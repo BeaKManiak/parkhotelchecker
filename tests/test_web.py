@@ -413,6 +413,8 @@ def test_adding_comparison_markets_to_an_existing_track(client) -> None:
     assert ">Primary<" in page.text
     assert ">Comparison<" in page.text
     assert ">Chart only<" in page.text
+    assert "10 EUR markets" in page.text
+    assert "Show all" in page.text
 
 
 def test_a_track_can_start_with_no_alerting_hotels(client) -> None:

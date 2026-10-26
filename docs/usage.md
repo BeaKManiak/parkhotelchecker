@@ -14,7 +14,9 @@ A line appears when, for an **active** track, on the **Spanish** market, for a
 
 The first successful check of a new track sends one baseline message instead:
 how many arrivals are priced, how many are sold out, and the cheapest current
-arrival. It is not a price change and ignores `min_delta`.
+arrival for **each shortlisted hotel**, cheapest first. A shortlisted hotel with
+no current price is listed as such. It is not a price change and ignores
+`min_delta`.
 
 `min_delta` is per track and editable.
 
@@ -57,9 +59,10 @@ it says so, and the dashboard header says "last successful check: N hours ago".
   Archived tracks sit in a collapsed section below.
 - **Track** — per-hotel cheapest available arrival, all-time low, last seen, the
   alert toggle, and a strip of facts (markets, threshold, changes in the last
-  24 h). Window trim/extend, Check now, stop, archive and delete live here.
-  **Check now** forces this track's fetch regardless of cadence, with a
-  60-second cooldown.
+  24 h). Markets are grouped into Primary, Comparison and Chart-only rows; the
+  comparison codes sit behind **Show all**. Window trim/extend, Check now, stop,
+  archive and delete live here. **Check now** forces this track's fetch
+  regardless of cadence, with a 60-second cooldown.
 - **Hotel** — price history opens **by check-in date**, with the cheapest
   current date in the summary and #1/#2/#3 badges on the three cheapest
   arrivals. **Over time** is the alternative: x is when the price was checked,

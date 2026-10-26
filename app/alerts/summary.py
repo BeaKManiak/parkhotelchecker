@@ -62,39 +62,81 @@ def _current_prices(conn: sqlite3.Connection, track_id: int) -> list[sqlite3.Row
     ).fetchall()
 
 
-def _summary(conn: sqlite3.Connection, track_id: int) -> str:
+def _first_check_body(conn: sqlite3.Connection, track_id: int) -> str:
+    """One line per shortlisted hotel, cheapest first.
+
+    The overall cheapest hotel is usually the one the owner already knows;
+    the useful baseline is the cheapest date for each hotel they actually
+    watch.
+    """
     rows = _current_prices(conn, track_id)
     seen = [row for row in rows if row["observed_at"]]
     priced = [row for row in rows if row["price_cents"] is not None and row["available"]]
     sold_out = [row for row in seen if row["price_cents"] is None]
 
-    if not priced:
-        return "No prices yet; the tracker will keep trying."
+    noun = "arrival" if len(priced) == 1 else "arrivals"
+    lines = [f"{len(priced)} {noun} priced · {len(sold_out)} sold out"]
 
-    shortlisted = {
+    if not priced:
+        lines.extend(["", "No prices yet; the tracker will keep trying."])
+        return "\n".join(lines)
+
+    shortlisted = [
         row["hotel_code"]
         for row in conn.execute(
             "SELECT hotel_code FROM track_hotel WHERE track_id = ? AND shortlisted = 1",
             (track_id,),
         )
-    }
-    candidates = [
-        row for row in priced if not shortlisted or row["hotel_code"] in shortlisted
     ]
-    if not candidates:
-        return "No prices for the shortlisted hotels yet."
 
-    best = min(
-        candidates,
-        key=lambda row: (int(row["price_cents"]), row["arrival_date"]),
+    if not shortlisted:
+        best = min(
+            priced,
+            key=lambda row: (int(row["price_cents"]), row["arrival_date"]),
+        )
+        arrival = date.fromisoformat(best["arrival_date"])
+        price = int(best["price_cents"]) / 100
+        lines.extend(
+            [
+                "",
+                f"Cheapest: {hotel_catalog.label(best['hotel_code'])} "
+                f"{arrival:%d %b} — €{price:,.2f}",
+                "",
+                "No hotels are shortlisted; showing the overall cheapest.",
+            ]
+        )
+        return "\n".join(lines)
+
+    entries = []
+    for code in shortlisted:
+        candidates = [row for row in priced if row["hotel_code"] == code]
+        best = (
+            min(
+                candidates,
+                key=lambda row: (int(row["price_cents"]), row["arrival_date"]),
+            )
+            if candidates
+            else None
+        )
+        entries.append((code, best))
+    entries.sort(
+        key=lambda item: (
+            item[1] is None,
+            int(item[1]["price_cents"]) if item[1] is not None else 0,
+            hotel_catalog.label(item[0]),
+        )
     )
-    arrival = date.fromisoformat(best["arrival_date"])
-    price = int(best["price_cents"]) / 100
-    return (
-        f"{len(priced)} arrivals priced · {len(sold_out)} sold out\n"
-        f"Cheapest: {hotel_catalog.label(best['hotel_code'])} "
-        f"{arrival:%d %b} — €{price:,.2f}"
-    )
+
+    lines.append("")
+    for code, best in entries:
+        name = hotel_catalog.label(code)
+        if best is None:
+            lines.append(f"{name} — no current price")
+        else:
+            arrival = date.fromisoformat(best["arrival_date"])
+            price = int(best["price_cents"]) / 100
+            lines.append(f"{name} — {arrival:%d %b} — €{price:,.2f}")
+    return "\n".join(lines)
 
 
 def build_first_checks(
@@ -124,7 +166,8 @@ def build_first_checks(
     messages = []
     for track in pending:
         messages.append(
-            f"🎢 {track['name']} — first check done\n{_summary(conn, int(track['id']))}"
+            f"🎢 {track['name']} — first check done\n"
+            f"{_first_check_body(conn, int(track['id']))}"
         )
         # Bookkeeping, not delivery state: a failed send is logged like any
         # other alert and is not retried forever.
@@ -149,6 +192,6 @@ def build_test_summary(
         f"🧪 Test check — {row['name']}",
         f"{requests} requests · {changes} changes · {errors} errors",
         "",
-        _summary(conn, track_id),
+        _first_check_body(conn, track_id),
     ]
     return "\n".join(lines)

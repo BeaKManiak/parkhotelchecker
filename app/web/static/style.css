@@ -197,9 +197,20 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
 .facts .fact-wide { grid-column: 1 / -1; }
 .facts .k { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .facts .v { display: block; font-size: 16px; font-weight: 550; margin-top: 2px; }
-.market-groups { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.market-group { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
-.market-group-label {
+.market-summary { display: flex; flex-direction: column; margin-top: 8px; }
+.market-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 8px 0 8px 10px;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid transparent;
+}
+.market-row:first-child { border-top: 0; padding-top: 0; }
+.market-row-primary { border-left-color: var(--accent); }
+.market-row-comparison { border-left-color: var(--muted); }
+.market-row-chart-only { border-left-color: var(--low); }
+.market-label {
   min-width: 88px;
   padding-top: 2px;
   font-size: 12px;
@@ -207,10 +218,16 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
   letter-spacing: 0.05em;
   color: var(--muted);
 }
+.market-row-body { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.market-count { font-size: 14px; font-weight: 550; }
+.market-details { flex-basis: 100%; }
+.market-details summary { cursor: pointer; font-size: 12px; color: var(--accent); }
+.market-details .market-pills { margin-top: 6px; }
 .market-pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .market-pill {
   display: inline-block;
   padding: 2px 8px;
+  border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--chip);
   color: var(--ink);

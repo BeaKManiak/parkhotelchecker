@@ -31,15 +31,30 @@
 
 <div class="facts">
   <div class="fact-wide"><span class="k">Markets · {{ markets|length }}</span>
-    <div class="market-groups">
+    <div class="market-summary">
       {% for label, entries in market_groups %}
       {% if entries %}
-      <div class="market-group">
-        <span class="market-group-label">{{ label }}</span>
-        <div class="market-pills">
-          {% for m in entries %}
-          <span class="market-pill">{{ m.market }} <small>{{ m.cadence_hours }} h</small></span>
-          {% endfor %}
+      <div class="market-row market-row-{{ label|lower|replace(' ', '-') }}">
+        <span class="market-label">{{ label }}</span>
+        <div class="market-row-body">
+          {% if label == 'Comparison' %}
+          <span class="market-count">{{ entries|length }} EUR market{% if entries|length != 1 %}s{% endif %}</span>
+          <span class="muted small">· every {{ entries[0].cadence_hours }} h</span>
+          <details class="market-details">
+            <summary>Show all</summary>
+            <div class="market-pills">
+              {% for m in entries %}
+              <span class="market-pill">{{ m.market }} <small>{{ m.cadence_hours }} h</small></span>
+              {% endfor %}
+            </div>
+          </details>
+          {% else %}
+          <div class="market-pills">
+            {% for m in entries %}
+            <span class="market-pill">{{ m.market }} <small>{{ m.cadence_hours }} h</small></span>
+            {% endfor %}
+          </div>
+          {% endif %}
         </div>
       </div>
       {% endif %}
